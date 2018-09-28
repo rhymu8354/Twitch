@@ -616,3 +616,25 @@ TEST_F(MessagingTests, SendMessageWhenNotConnected) {
     tmi.SendMessage("foobar1125", "Hello, World!");
     EXPECT_FALSE(mockServer->AwaitLineReceived("PRIVMSG #foobar1125 :Hello, World!"));
 }
+
+TEST_F(MessagingTests, Ping) {
+    // Log in and then clear the received lines buffer.
+    LogIn();
+    mockServer->ClearLinesReceived();
+
+    // Have the pretend Twitch server simulate a PING message.
+    mockServer->ReturnToClient(
+        "PING :Hello!" + CRLF
+        + "PING :Are you there?" + CRLF
+    );
+
+    // Wait for the user agent to respond with a corresponding PONG message.
+    ASSERT_TRUE(mockServer->AwaitLineReceived("PONG :Are you there?")) << mockServer->GetLinesReceived().size();
+    EXPECT_EQ(
+        (std::vector< std::string >{
+            "PONG :Hello!",
+            "PONG :Are you there?"
+        }),
+        mockServer->GetLinesReceived()
+    );
+}

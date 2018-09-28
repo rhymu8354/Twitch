@@ -494,6 +494,14 @@ namespace Twitch {
                                         loggedIn = true;
                                         user->LogIn();
                                     }
+                                } else if (message.command == "PING") {
+                                    if (message.parameters.size() < 1) {
+                                        continue;
+                                    }
+                                    const auto server = message.parameters[0];
+                                    if (connection != nullptr) {
+                                        connection->Send("PONG :" + server + CRLF);
+                                    }
                                 } else if (message.command == "JOIN") {
                                     if (
                                         (message.parameters.size() < 1)
