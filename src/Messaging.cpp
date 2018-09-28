@@ -10,8 +10,10 @@
 #include <condition_variable>
 #include <deque>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <Twitch/Messaging.hpp>
+#include <vector>
 
 namespace {
 
@@ -84,6 +86,31 @@ namespace {
         std::string message;
     };
 
+    /**
+     * This contains all the information parsed from a single message
+     * from the Twitch server.
+     */
+    struct Message {
+        /**
+         * If this is not an empty string, the message included a prefix,
+         * which is stored here, without the leading colon (:) character.
+         */
+        std::string prefix;
+
+        /**
+         * This is the command portion of the message, which may be
+         * a three-digit code, or an IRC command name.
+         *
+         * If it's empty, the message was invalid, or there was no message.
+         */
+        std::string command;
+
+        /**
+         * These are the parameters, if any, provided in the message.
+         */
+        std::vector< std::string > parameters;
+    };
+
 }
 
 namespace Twitch {
@@ -144,7 +171,138 @@ namespace Twitch {
          */
         std::shared_ptr< Connection > connection;
 
+        /**
+         * This is essentially just a buffer to receive raw characters from
+         * the Twitch server, until a complete line has been received, removed
+         * from this buffer, and handled appropriately.
+         */
+        std::string dataReceived;
+
         // Methods
+
+        /**
+         * This method extracts the next message received from the
+         * Twitch server.
+         *
+         * @param[out] message
+         *     This is where to store the next message received from the
+         *     Twitch server.
+         *
+         * @return
+         *     An indication of whether or not a complete line was
+         *     extracted is returned.
+         */
+        bool GetNextMessage(Message& message) {
+            // Extract the next line.
+            const auto lineEnd = dataReceived.find(CRLF);
+            if (lineEnd == std::string::npos) {
+                return false;
+            }
+            const auto line = dataReceived.substr(0, lineEnd);
+
+            // Remove the line from the buffer.
+            dataReceived = dataReceived.substr(lineEnd + CRLF.length());
+
+            // Unpack the message from the line.
+            size_t offset = 0;
+            int state = 0;
+            message = Message();
+            while (offset < line.length()) {
+                switch (state) {
+                    // First character of the line.  It could be ':',
+                    // which signals a prefix, or it's the first character
+                    // of the command.
+                    case 0: {
+                        if (line[offset] == ':') {
+                            state = 1;
+                        } else {
+                        }
+                    } break;
+
+                    // Prefix
+                    case 1: {
+                        if (line[offset] == ' ') {
+                            state = 2;
+                        } else {
+                            message.prefix += line[offset];
+                        }
+                    } break;
+
+                    // First character of command
+                    case 2: {
+                        if (line[offset] != ' ') {
+                            state = 3;
+                            message.command += line[offset];
+                        }
+                    } break;
+
+                    // Command
+                    case 3: {
+                        if (line[offset] == ' ') {
+                            state = 4;
+                        } else {
+                            message.command += line[offset];
+                        }
+                    } break;
+
+                    // First character of parameter
+                    case 4: {
+                        if (line[offset] == ':') {
+                            state = 6;
+                            message.parameters.push_back("");
+                        } else if (line[offset] != ' ') {
+                            state = 5;
+                            message.parameters.push_back(line.substr(offset, 1));
+                        }
+                    } break;
+
+                    // Parameter (not last, or last having no spaces)
+                    case 5: {
+                        if (line[offset] == ' ') {
+                            state = 4;
+                        } else {
+                            message.parameters.back() += line[offset];
+                        }
+                    } break;
+
+                    // Last Parameter (may include spaces)
+                    case 6: {
+                        message.parameters.back() += line[offset];
+                    } break;
+                }
+                ++offset;
+            }
+            if (
+                (state == 0)
+                || (state == 1)
+                || (state == 2)
+            ) {
+                message.command.clear();
+            }
+            return true;
+        }
+
+        /**
+         * This method is called to whenever any message is received from the
+         * Twitch server for the user agent.
+         *
+         * @param[in] rawText
+         *     This is the raw text received from the Twitch server.
+         */
+        void MessageReceived(const std::string& rawText) {
+            dataReceived += rawText;
+            Message message;
+            while (GetNextMessage(message)) {
+                if (message.command.empty()) {
+                    continue;
+                }
+                if (message.command == "376") { // RPL_ENDOFMOTD (RFC 1459)
+                        if (loggedInDelegate != nullptr) {
+                            loggedInDelegate();
+                        }
+                }
+            }
+        }
 
         /**
          * This method signals the worker thread to stop.
@@ -171,12 +329,12 @@ namespace Twitch {
                                 break;
                             }
                             connection = connectionFactory();
+                            connection->SetMessageReceivedDelegate(
+                                std::bind(&Impl::MessageReceived, this, std::placeholders::_1)
+                            );
                             if (connection->Connect()) {
                                 connection->Send("PASS oauth:" + nextAction.token + CRLF);
                                 connection->Send("NICK " + nextAction.nickname + CRLF);
-                                if (loggedInDelegate != nullptr) {
-                                    loggedInDelegate();
-                                }
                             } else {
                                 if (loggedOutDelegate != nullptr) {
                                     loggedOutDelegate();

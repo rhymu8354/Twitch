@@ -32,6 +32,9 @@ namespace {
     {
         // Properties
 
+        std::condition_variable wakeCondition;
+        std::mutex mutex;
+        MessageReceivedDelegate messageReceivedDelegate;
         bool failConnectionAttempt = false;
         bool isConnected = false;
         bool isDisconnected = false;
@@ -42,6 +45,15 @@ namespace {
         std::vector< std::string > linesReceived;
 
         // Methods
+
+        bool AwaitNickname() {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this]{ return !nicknameOffered.empty(); }
+            );
+        }
 
         std::string GetNicknameOffered() {
             return nicknameOffered;
@@ -75,7 +87,17 @@ namespace {
             failConnectionAttempt = true;
         }
 
+        void ReturnToClient(const std::string& message) {
+            if (messageReceivedDelegate != nullptr) {
+                messageReceivedDelegate(message);
+            }
+        }
+
         // Twitch::Connection
+
+        virtual void SetMessageReceivedDelegate(MessageReceivedDelegate messageReceivedDelegate) override {
+            this->messageReceivedDelegate = messageReceivedDelegate;
+        }
 
         virtual bool Connect() override {
             if (failConnectionAttempt) {
@@ -106,8 +128,10 @@ namespace {
                 passwordOffered = line.substr(5);
                 passwordOffered = SystemAbstractions::Trim(passwordOffered);
             } else if (line.substr(0, 5) == "NICK ") {
+                std::lock_guard< std::mutex > lock(mutex);
                 nicknameOffered = line.substr(5);
                 nicknameOffered = SystemAbstractions::Trim(nicknameOffered);
+                wakeCondition.notify_one();
             }
         }
 
@@ -167,6 +191,11 @@ struct MessagingTests
         const std::string nickname = "ninja";
         const std::string token = "alskdfjasdf87sdfsdffsd";
         tmi.LogIn(nickname, token);
+        (void)mockServer->AwaitNickname();
+        mockServer->ReturnToClient(
+            ":tmi.twitch.tv 372 <user> :You are in a maze of twisty passages." + CRLF
+            + ":tmi.twitch.tv 376 <user> :>" + CRLF
+        );
         {
             std::unique_lock< std::mutex > lock(mutex);
             (void)wakeCondition.wait_for(
@@ -213,6 +242,21 @@ TEST_F(MessagingTests, LogIntoChat) {
     const std::string nickname = "ninja";
     const std::string token = "alskdfjasdf87sdfsdffsd";
     tmi.LogIn(nickname, token);
+    EXPECT_TRUE(mockServer->AwaitNickname());
+    {
+        std::unique_lock< std::mutex > lock(mutex);
+        EXPECT_FALSE(
+            wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [&loggedIn]{ return loggedIn; }
+            )
+        );
+    }
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv 372 <user> :You are in a maze of twisty passages." + CRLF
+        + ":tmi.twitch.tv 376 <user> :>" + CRLF
+    );
     {
         std::unique_lock< std::mutex > lock(mutex);
         ASSERT_TRUE(
@@ -308,7 +352,7 @@ TEST_F(MessagingTests, LogInWhenAlreadyLoggedIn) {
     }
 }
 
-TEST_F(MessagingTests, LogInFailure) {
+TEST_F(MessagingTests, LogInFailureToConnect) {
     // First set up the mock server to simulate a connection failure.
     mockServer->FailConnectionAttempt();
 
