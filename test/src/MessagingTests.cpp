@@ -486,7 +486,8 @@ TEST_F(MessagingTests, JoinChannel) {
 }
 
 TEST_F(MessagingTests, JoinChannelWhenNotConnected) {
-    // TODO: Needs to be implemented
+    tmi.Join("foobar1125");
+    EXPECT_FALSE(mockServer->AwaitLineReceived("JOIN #foobar1125"));
 }
 
 TEST_F(MessagingTests, LeaveChannel) {

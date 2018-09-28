@@ -507,6 +507,9 @@ namespace Twitch {
                         } break;
 
                         case ActionType::Join: {
+                            if (connection == nullptr) {
+                                break;
+                            }
                             connection->Send("JOIN #" + nextAction.nickname + CRLF);
                         } break;
 
