@@ -159,7 +159,6 @@ namespace {
             } else if (line.substr(0, 5) == "NICK ") {
                 nicknameOffered = line.substr(5);
                 nicknameOffered = SystemAbstractions::Trim(nicknameOffered);
-                wakeCondition.notify_one();
             }
             wakeCondition.notify_one();
         }
