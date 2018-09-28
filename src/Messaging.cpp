@@ -192,18 +192,10 @@ namespace Twitch {
         std::shared_ptr< TimeKeeper > timeKeeper;
 
         /**
-         * This is the function to call when the user agent successfully logs
-         * into the Twitch server.
+         * This is the object provided by the user of this class, in order to
+         * receive notifications, events, and other callbacks from the class.
          */
-        LoggedInDelegate loggedInDelegate;
-
-        /**
-         * This is the function to call when the user agent completes
-         * logging out of the Twitch server.
-         */
-        LoggedOutDelegate loggedOutDelegate;
-
-        JoinDelegate joinDelegate;
+        std::shared_ptr< User > user = std::make_shared< User >();
 
         /**
          * This is used to synchronize access to the object.
@@ -391,9 +383,7 @@ namespace Twitch {
                 connection.Send("QUIT :" + farewell + CRLF);
             }
             connection.Disconnect();
-            if (loggedOutDelegate != nullptr) {
-                loggedOutDelegate();
-            }
+            user->LogOut();
         }
 
         /**
@@ -472,9 +462,7 @@ namespace Twitch {
                                     timeoutConditions.push(timeoutCondition);
                                 }
                             } else {
-                                if (loggedOutDelegate != nullptr) {
-                                    loggedOutDelegate();
-                                }
+                                user->LogOut();
                             }
                         } break;
 
@@ -494,9 +482,7 @@ namespace Twitch {
                                 if (message.command == "376") { // RPL_ENDOFMOTD (RFC 1459)
                                     if (!loggedIn) {
                                         loggedIn = true;
-                                        if (loggedInDelegate != nullptr) {
-                                            loggedInDelegate();
-                                        }
+                                        user->LogIn();
                                     }
                                 } else if (message.command == "JOIN") {
                                     if (
@@ -511,9 +497,7 @@ namespace Twitch {
                                     }
                                     const auto nickname = message.prefix.substr(0, nicknameDelimiter);
                                     const auto channel = message.parameters[0].substr(1);
-                                    if (joinDelegate != nullptr) {
-                                        joinDelegate(channel, nickname);
-                                    }
+                                    user->Join(channel, nickname);
                                 }
                             }
                         } break;
@@ -576,16 +560,8 @@ namespace Twitch {
         impl_->timeKeeper = timeKeeper;
     }
 
-    void Messaging::SetLoggedInDelegate(LoggedInDelegate loggedInDelegate) {
-        impl_->loggedInDelegate = loggedInDelegate;
-    }
-
-    void Messaging::SetLoggedOutDelegate(LoggedOutDelegate loggedOutDelegate) {
-        impl_->loggedOutDelegate = loggedOutDelegate;
-    }
-
-    void Messaging::SetJoinDelegate(JoinDelegate joinDelegate) {
-        impl_->joinDelegate = joinDelegate;
+    void Messaging::SetUser(std::shared_ptr< User > user) {
+        impl_->user = user;
     }
 
     void Messaging::LogIn(

@@ -188,6 +188,94 @@ namespace {
         }
     };
 
+    /**
+     * This contains all the information received for a single Join callback.
+     */
+    struct JoinInfo {
+        /**
+         * This is the channel where the user joined.
+         */
+        std::string channel;
+
+        /**
+         * This is the nickname of the user who joined.
+         */
+        std::string user;
+    };
+
+    /**
+     * This represents the user of the unit under test, and receives all
+     * notifications, events, and other callbacks from the unit under test.
+     */
+    struct User
+        : public Twitch::Messaging::User
+    {
+        // Properties
+
+        bool loggedIn = false;
+        bool loggedOut = false;
+        std::vector< JoinInfo > joins;
+        std::condition_variable wakeCondition;
+        std::mutex mutex;
+
+        // Methods
+
+        bool AwaitLogIn() {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this]{ return loggedIn; }
+            );
+        }
+
+        bool AwaitLogOut() {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this]{ return loggedOut; }
+            );
+        }
+
+        bool AwaitJoin() {
+            std::unique_lock< std::mutex > lock(mutex);
+            const auto numJoinsBefore = joins.size();
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this, numJoinsBefore]{ return joins.size() != numJoinsBefore; }
+            );
+        }
+
+        // Twitch::Messaging::User
+
+        virtual void LogIn() override {
+            std::lock_guard< std::mutex > lock(mutex);
+            loggedIn = true;
+            wakeCondition.notify_one();
+        }
+
+        virtual void LogOut() override {
+            std::lock_guard< std::mutex > lock(mutex);
+            loggedOut = true;
+            wakeCondition.notify_one();
+        }
+
+        virtual void Join(
+            const std::string& channel,
+            const std::string& user
+        ) override {
+            std::lock_guard< std::mutex > lock(mutex);
+            JoinInfo joinInfo;
+            joinInfo.channel = channel;
+            joinInfo.user = user;
+            joins.push_back(joinInfo);
+            wakeCondition.notify_one();
+        }
+
+    };
+
 }
 
 /**
@@ -203,6 +291,12 @@ struct MessagingTests
      * This is the unit under test.
      */
     Twitch::Messaging tmi;
+
+    /**
+     * This represents the user of the unit under test, and receives all
+     * notifications, events, and other callbacks from the unit under test.
+     */
+    std::shared_ptr< User > user = std::make_shared< User >();
 
     /**
      * This is used to simulate the Twitch server.
@@ -227,20 +321,6 @@ struct MessagingTests
      * log into the mock Twitch server.
      */
     void LogIn() {
-        bool loggedIn = false;
-        std::condition_variable wakeCondition;
-        std::mutex mutex;
-        tmi.SetLoggedInDelegate(
-            [
-                &loggedIn,
-                &wakeCondition,
-                &mutex
-            ]{
-                std::lock_guard< std::mutex > lock(mutex);
-                loggedIn = true;
-                wakeCondition.notify_one();
-            }
-        );
         const std::string nickname = "foobar1124";
         const std::string token = "alskdfjasdf87sdfsdffsd";
         tmi.LogIn(nickname, token);
@@ -249,14 +329,7 @@ struct MessagingTests
             ":tmi.twitch.tv 372 <user> :You are in a maze of twisty passages." + CRLF
             + ":tmi.twitch.tv 376 <user> :>" + CRLF
         );
-        {
-            std::unique_lock< std::mutex > lock(mutex);
-            (void)wakeCondition.wait_for(
-                lock,
-                std::chrono::milliseconds(100),
-                [&loggedIn]{ return loggedIn; }
-            );
-        }
+        (void)user->AwaitLogIn();
         mockServer->ClearLinesReceived();
     }
 
@@ -272,6 +345,7 @@ struct MessagingTests
         };
         tmi.SetConnectionFactory(connectionFactory);
         tmi.SetTimeKeeper(mockTimeKeeper);
+        tmi.SetUser(user);
     }
 
     virtual void TearDown() {
@@ -279,48 +353,16 @@ struct MessagingTests
 };
 
 TEST_F(MessagingTests, LogIntoChat) {
-    bool loggedIn = false;
-    std::condition_variable wakeCondition;
-    std::mutex mutex;
-    tmi.SetLoggedInDelegate(
-        [
-            &loggedIn,
-            &wakeCondition,
-            &mutex
-        ]{
-            std::lock_guard< std::mutex > lock(mutex);
-            loggedIn = true;
-            wakeCondition.notify_one();
-        }
-    );
     const std::string nickname = "foobar1124";
     const std::string token = "alskdfjasdf87sdfsdffsd";
     tmi.LogIn(nickname, token);
     EXPECT_TRUE(mockServer->AwaitNickname());
-    {
-        std::unique_lock< std::mutex > lock(mutex);
-        EXPECT_FALSE(
-            wakeCondition.wait_for(
-                lock,
-                std::chrono::milliseconds(100),
-                [&loggedIn]{ return loggedIn; }
-            )
-        );
-    }
+    EXPECT_FALSE(user->AwaitLogIn());
     mockServer->ReturnToClient(
         ":tmi.twitch.tv 372 <user> :You are in a maze of twisty passages." + CRLF
         + ":tmi.twitch.tv 376 <user> :>" + CRLF
     );
-    {
-        std::unique_lock< std::mutex > lock(mutex);
-        ASSERT_TRUE(
-            wakeCondition.wait_for(
-                lock,
-                std::chrono::milliseconds(100),
-                [&loggedIn]{ return loggedIn; }
-            )
-        );
-    }
+    ASSERT_TRUE(user->AwaitLogIn());
     EXPECT_TRUE(mockServer->IsConnected());
     EXPECT_FALSE(mockServer->WasThereAConnectionProblem());
     EXPECT_EQ(nickname, mockServer->GetNicknameOffered());
@@ -336,33 +378,10 @@ TEST_F(MessagingTests, LogIntoChat) {
 }
 
 TEST_F(MessagingTests, LogOutOfChat) {
-    bool loggedOut = false;
-    std::condition_variable wakeCondition;
-    std::mutex mutex;
-    tmi.SetLoggedOutDelegate(
-        [
-            &loggedOut,
-            &wakeCondition,
-            &mutex
-        ]{
-            std::lock_guard< std::mutex > lock(mutex);
-            loggedOut = true;
-            wakeCondition.notify_one();
-        }
-    );
     LogIn();
     const std::string farewell = "See ya sucker!";
     tmi.LogOut(farewell);
-    {
-        std::unique_lock< std::mutex > lock(mutex);
-        ASSERT_TRUE(
-            wakeCondition.wait_for(
-                lock,
-                std::chrono::milliseconds(100),
-                [&loggedOut]{ return loggedOut; }
-            )
-        );
-    }
+    ASSERT_TRUE(user->AwaitLogOut());
     EXPECT_EQ(
         (std::vector< std::string >{
             "QUIT :" + farewell,
@@ -377,33 +396,11 @@ TEST_F(MessagingTests, LogInWhenAlreadyLoggedIn) {
     LogIn();
 
     // Try to log in again, while still logged in.
-    bool loggedIn = false;
-    std::condition_variable wakeCondition;
-    std::mutex mutex;
-    tmi.SetLoggedInDelegate(
-        [
-            &loggedIn,
-            &wakeCondition,
-            &mutex
-        ]{
-            std::lock_guard< std::mutex > lock(mutex);
-            loggedIn = true;
-            wakeCondition.notify_one();
-        }
-    );
+    user->loggedIn = false;
     const std::string nickname = "foobar1124";
     const std::string token = "alskdfjasdf87sdfsdffsd";
     tmi.LogIn(nickname, token);
-    {
-        std::unique_lock< std::mutex > lock(mutex);
-        ASSERT_FALSE(
-            wakeCondition.wait_for(
-                lock,
-                std::chrono::milliseconds(100),
-                [&loggedIn]{ return loggedIn; }
-            )
-        );
-    }
+    ASSERT_FALSE(user->AwaitLogIn());
 }
 
 TEST_F(MessagingTests, LogInFailureToConnect) {
@@ -411,125 +408,39 @@ TEST_F(MessagingTests, LogInFailureToConnect) {
     mockServer->FailConnectionAttempt();
 
     // Now try to log in.
-    bool loggedOut = false;
-    std::condition_variable wakeCondition;
-    std::mutex mutex;
-    tmi.SetLoggedOutDelegate(
-        [
-            &loggedOut,
-            &wakeCondition,
-            &mutex
-        ]{
-            std::lock_guard< std::mutex > lock(mutex);
-            loggedOut = true;
-            wakeCondition.notify_one();
-        }
-    );
     const std::string nickname = "foobar1124";
     const std::string token = "alskdfjasdf87sdfsdffsd";
     tmi.LogIn(nickname, token);
-    {
-        std::unique_lock< std::mutex > lock(mutex);
-        ASSERT_TRUE(
-            wakeCondition.wait_for(
-                lock,
-                std::chrono::milliseconds(100),
-                [&loggedOut]{ return loggedOut; }
-            )
-        );
-    }
+    ASSERT_TRUE(user->AwaitLogOut());
 }
 
 TEST_F(MessagingTests, ExtraMotdWhileAlreadyLoggedIn) {
     // Log in normally, before the "test" begins.
     LogIn();
 
+    // Reset the "loggedIn" flag, to make sure we'll be able to see if it gets
+    // set again when the extra MOTD is received.
+    user->loggedIn = false;
+
     // Have the server send another MOTD, and make sure
     // we don't receive an extra logged-in callback.
-    bool loggedIn = false;
-    std::condition_variable wakeCondition;
-    std::mutex mutex;
-    tmi.SetLoggedInDelegate(
-        [
-            &loggedIn,
-            &wakeCondition,
-            &mutex
-        ]{
-            std::lock_guard< std::mutex > lock(mutex);
-            loggedIn = true;
-            wakeCondition.notify_one();
-        }
-    );
     mockServer->ReturnToClient(
         ":tmi.twitch.tv 372 <user> :You are in a maze of twisty passages." + CRLF
         + ":tmi.twitch.tv 376 <user> :>" + CRLF
     );
-    {
-        std::unique_lock< std::mutex > lock(mutex);
-        EXPECT_FALSE(
-            wakeCondition.wait_for(
-                lock,
-                std::chrono::milliseconds(100),
-                [&loggedIn]{ return loggedIn; }
-            )
-        );
-    }
+    EXPECT_FALSE(user->AwaitLogIn());
 }
 
 TEST_F(MessagingTests, LogInFailureNoMotd) {
-    bool loggedIn = false;
-    bool loggedOut = false;
-    std::condition_variable wakeCondition;
-    std::mutex mutex;
-    tmi.SetLoggedInDelegate(
-        [
-            &loggedIn,
-            &wakeCondition,
-            &mutex
-        ]{
-            std::lock_guard< std::mutex > lock(mutex);
-            loggedIn = true;
-            wakeCondition.notify_one();
-        }
-    );
-    tmi.SetLoggedOutDelegate(
-        [
-            &loggedOut,
-            &wakeCondition,
-            &mutex
-        ]{
-            std::lock_guard< std::mutex > lock(mutex);
-            loggedOut = true;
-            wakeCondition.notify_one();
-        }
-    );
     const std::string nickname = "foobar1124";
     const std::string token = "alskdfjasdf87sdfsdffsd";
     tmi.LogIn(nickname, token);
     (void)mockServer->AwaitNickname();
     mockServer->ClearLinesReceived();
-    {
-        std::unique_lock< std::mutex > lock(mutex);
-        ASSERT_FALSE(
-            wakeCondition.wait_for(
-                lock,
-                std::chrono::milliseconds(100),
-                [&loggedOut]{ return loggedOut; }
-            )
-        );
-    }
+    ASSERT_FALSE(user->AwaitLogOut());
     mockTimeKeeper->currentTime = 5.0;
-    {
-        std::unique_lock< std::mutex > lock(mutex);
-        EXPECT_TRUE(
-            wakeCondition.wait_for(
-                lock,
-                std::chrono::milliseconds(100),
-                [&loggedOut]{ return loggedOut; }
-            )
-        );
-    }
-    EXPECT_FALSE(loggedIn);
+    EXPECT_TRUE(user->AwaitLogOut());
+    EXPECT_FALSE(user->loggedIn);
     EXPECT_EQ(
         (std::vector< std::string >{
             "QUIT :Timeout waiting for MOTD"
@@ -540,59 +451,15 @@ TEST_F(MessagingTests, LogInFailureNoMotd) {
 }
 
 TEST_F(MessagingTests, LogInFailureUnexpectedDisconnect) {
-    bool loggedIn = false;
-    bool loggedOut = false;
-    std::condition_variable wakeCondition;
-    std::mutex mutex;
-    tmi.SetLoggedInDelegate(
-        [
-            &loggedIn,
-            &wakeCondition,
-            &mutex
-        ]{
-            std::lock_guard< std::mutex > lock(mutex);
-            loggedIn = true;
-            wakeCondition.notify_one();
-        }
-    );
-    tmi.SetLoggedOutDelegate(
-        [
-            &loggedOut,
-            &wakeCondition,
-            &mutex
-        ]{
-            std::lock_guard< std::mutex > lock(mutex);
-            loggedOut = true;
-            wakeCondition.notify_one();
-        }
-    );
     const std::string nickname = "foobar1124";
     const std::string token = "alskdfjasdf87sdfsdffsd";
     tmi.LogIn(nickname, token);
     EXPECT_TRUE(mockServer->AwaitNickname());
-    {
-        std::unique_lock< std::mutex > lock(mutex);
-        EXPECT_FALSE(
-            wakeCondition.wait_for(
-                lock,
-                std::chrono::milliseconds(100),
-                [&loggedIn]{ return loggedIn; }
-            )
-        );
-    }
+    EXPECT_FALSE(user->AwaitLogIn());
     mockServer->ClearLinesReceived();
     mockServer->DisconnectClient();
-    {
-        std::unique_lock< std::mutex > lock(mutex);
-        EXPECT_TRUE(
-            wakeCondition.wait_for(
-                lock,
-                std::chrono::milliseconds(100),
-                [&loggedOut]{ return loggedOut; }
-            )
-        );
-    }
-    EXPECT_FALSE(loggedIn);
+    EXPECT_TRUE(user->AwaitLogOut());
+    EXPECT_FALSE(user->loggedIn);
     EXPECT_EQ(
         (std::vector< std::string >{
         }),
@@ -608,46 +475,15 @@ TEST_F(MessagingTests, JoinChannel) {
     // Attempt to join a channel.  Wait for the mock server
     // to receive the JOIN command, and then have it issue back
     // the expected reponses.
-    bool joined = false;
-    std::string joinChannel;
-    std::string joinUser;
-    std::condition_variable wakeCondition;
-    std::mutex mutex;
-    tmi.SetJoinDelegate(
-        [
-            &joined,
-            &joinChannel,
-            &joinUser,
-            &wakeCondition,
-            &mutex
-        ](
-            const std::string& channel,
-            const std::string& user
-        ){
-            std::lock_guard< std::mutex > lock(mutex);
-            joined = true;
-            joinChannel = channel;
-            joinUser = user;
-            wakeCondition.notify_one();
-        }
-    );
     tmi.Join("foobar1125");
     EXPECT_TRUE(mockServer->AwaitLineReceived("JOIN #foobar1125"));
     mockServer->ReturnToClient(
         ":foobar1124!foobar1124@foobar1124.tmi.twitch.tv JOIN #foobar1125" + CRLF
     );
-    {
-        std::unique_lock< std::mutex > lock(mutex);
-        ASSERT_TRUE(
-            wakeCondition.wait_for(
-                lock,
-                std::chrono::milliseconds(100),
-                [&joined]{ return joined; }
-            )
-        );
-    }
-    EXPECT_EQ("foobar1125", joinChannel);
-    EXPECT_EQ("foobar1124", joinUser);
+    ASSERT_TRUE(user->AwaitJoin());
+    ASSERT_EQ(1, user->joins.size());
+    EXPECT_EQ("foobar1125", user->joins[0].channel);
+    EXPECT_EQ("foobar1124", user->joins[0].user);
 }
 
 TEST_F(MessagingTests, JoinChannelWhenNotConnected) {

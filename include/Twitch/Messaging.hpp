@@ -33,24 +33,46 @@ namespace Twitch {
         typedef std::function< std::shared_ptr< Connection >() > ConnectionFactory;
 
         /**
-         * This is the type of function used to notify the user
-         * when the agent has successfully logged into the Twitch server.
+         * This is a base class and interface to be implemented by the user of
+         * this class, in order to receive notifications, events, and other
+         * callbacks from the class.
+         *
+         * By default, the base class provides an implementation of each
+         * method which essentially does nothing.  The derived class need not
+         * override methods it doesn't care about.
          */
-        typedef std::function< void() > LoggedInDelegate;
+        class User {
+        public:
+            /**
+             * This is called to notify the user when the user agent has
+             * successfully logged into the Twitch server.
+             */
+            virtual void LogIn() {
+            }
 
-        /**
-         * This is the function to call when the user agent completes
-         * logging out of the Twitch server, or when the connection
-         * is closed, or could not be established in the first place.
-         */
-        typedef std::function< void() > LoggedOutDelegate;
+            /**
+             * This is called when the user agent completes logging out of the
+             * Twitch server, or when the connection is closed, or could not
+             * be established in the first place.
+             */
+            virtual void LogOut() {
+            }
 
-        typedef std::function<
-            void(
+            /**
+             * This is called whenever a user joins a channel.
+             *
+             * @param[in] channel
+             *     This is the name of the channel the user joined.
+             *
+             * @param[in] user
+             *     This is the nickname of the user who joined the channel.
+             */
+            virtual void Join(
                 const std::string& channel,
                 const std::string& user
-            )
-        > JoinDelegate;
+            ) {
+            }
+        };
 
         // Lifecycle management
     public:
@@ -87,26 +109,15 @@ namespace Twitch {
         void SetTimeKeeper(std::shared_ptr< TimeKeeper > timeKeeper);
 
         /**
-         * This method is called to set up a callback to happen when
-         * the user agent successfully logs into the Twitch server.
+         * This method is called to set the object which will receive
+         * any notifications, events, or callbacks of interest to the user.
          *
-         * @param[in] loggedInDelegate
-         *     This is the function to call when the user agent successfully
-         *     logs into the Twitch server.
+         * @param[in] user
+         *     This is the object provided by the user of this class,
+         *     in order to receive notifications, events, and other callbacks
+         *     from the class.
          */
-        void SetLoggedInDelegate(LoggedInDelegate loggedInDelegate);
-
-        /**
-         * This method is called to set up a callback to happen when
-         * the user agent completes logging out of the Twitch server.
-         *
-         * @param[in] loggedOutDelegate
-         *     This is the function to call when the user agent completes
-         *     logging out of the Twitch server.
-         */
-        void SetLoggedOutDelegate(LoggedOutDelegate loggedOutDelegate);
-
-        void SetJoinDelegate(JoinDelegate joinDelegate);
+        void SetUser(std::shared_ptr< User > user);
 
         /**
          * This method starts the process of logging into the Twitch server.
