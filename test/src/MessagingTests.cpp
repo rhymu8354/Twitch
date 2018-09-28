@@ -36,6 +36,7 @@ namespace {
         std::condition_variable wakeCondition;
         std::mutex mutex;
         MessageReceivedDelegate messageReceivedDelegate;
+        DisconnectedDelegate disconnectedDelegate;
         bool failConnectionAttempt = false;
         bool isConnected = false;
         bool isDisconnected = false;
@@ -94,10 +95,20 @@ namespace {
             }
         }
 
+        void DisconnectClient() {
+            if (disconnectedDelegate != nullptr) {
+                disconnectedDelegate();
+            }
+        }
+
         // Twitch::Connection
 
         virtual void SetMessageReceivedDelegate(MessageReceivedDelegate messageReceivedDelegate) override {
             this->messageReceivedDelegate = messageReceivedDelegate;
+        }
+
+        virtual void SetDisconnectedDelegate(DisconnectedDelegate disconnectedDelegate) override {
+            this->disconnectedDelegate = disconnectedDelegate;
         }
 
         virtual bool Connect() override {
@@ -512,6 +523,65 @@ TEST_F(MessagingTests, LogInFailureNoMotd) {
 }
 
 TEST_F(MessagingTests, LogInFailureUnexpectedDisconnect) {
+    bool loggedIn = false;
+    bool loggedOut = false;
+    std::condition_variable wakeCondition;
+    std::mutex mutex;
+    tmi.SetLoggedInDelegate(
+        [
+            &loggedIn,
+            &wakeCondition,
+            &mutex
+        ]{
+            std::lock_guard< std::mutex > lock(mutex);
+            loggedIn = true;
+            wakeCondition.notify_one();
+        }
+    );
+    tmi.SetLoggedOutDelegate(
+        [
+            &loggedOut,
+            &wakeCondition,
+            &mutex
+        ]{
+            std::lock_guard< std::mutex > lock(mutex);
+            loggedOut = true;
+            wakeCondition.notify_one();
+        }
+    );
+    const std::string nickname = "ninja";
+    const std::string token = "alskdfjasdf87sdfsdffsd";
+    tmi.LogIn(nickname, token);
+    EXPECT_TRUE(mockServer->AwaitNickname());
+    {
+        std::unique_lock< std::mutex > lock(mutex);
+        EXPECT_FALSE(
+            wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [&loggedIn]{ return loggedIn; }
+            )
+        );
+    }
+    mockServer->ClearLinesReceived();
+    mockServer->DisconnectClient();
+    {
+        std::unique_lock< std::mutex > lock(mutex);
+        EXPECT_TRUE(
+            wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [&loggedOut]{ return loggedOut; }
+            )
+        );
+    }
+    EXPECT_FALSE(loggedIn);
+    EXPECT_EQ(
+        (std::vector< std::string >{
+        }),
+        mockServer->GetLinesReceived()
+    );
+    EXPECT_TRUE(mockServer->IsDisconnected());
 }
 
 TEST_F(MessagingTests, ReceiveMessages) {

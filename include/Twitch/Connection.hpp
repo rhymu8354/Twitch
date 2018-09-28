@@ -33,6 +33,12 @@ namespace Twitch {
          */
         typedef std::function< void(const std::string& message) > MessageReceivedDelegate;
 
+        /**
+         * This is the type of function to call when
+         * the Twitch server closes its end of the connection.
+         */
+        typedef std::function< void() > DisconnectedDelegate;
+
         // Methods
 
         /**
@@ -44,6 +50,16 @@ namespace Twitch {
          *     from the Twitch server for the user agent.
          */
         virtual void SetMessageReceivedDelegate(MessageReceivedDelegate messageReceivedDelegate) = 0;
+
+        /**
+         * This method is called to set up a callback to happen when
+         * the Twitch server closes its end of the connection.
+         *
+         * @param[in] disconnectedDelegate
+         *     This is the function to call when the Twitch server closes
+         *     its end of the connection.
+         */
+        virtual void SetDisconnectedDelegate(DisconnectedDelegate disconnectedDelegate) = 0;
 
         /**
          * This method is called to establish a connection to the Twitch chat

@@ -69,6 +69,11 @@ namespace {
          * Process all messages received from the Twitch server.
          */
         ProcessMessagesReceived,
+
+        /**
+         * Handle when the server closes its end of the connection.
+         */
+        ServerDisconnected,
     };
 
     /**
@@ -348,6 +353,18 @@ namespace Twitch {
         }
 
         /**
+         * This method is called when the Twitch server closes its end of the
+         * connection.
+         */
+        void ServerDisconnected() {
+            std::lock_guard< decltype(impl_->mutex) > lock(mutex);
+            Action action;
+            action.type = ActionType::ServerDisconnected;
+            actions.push_back(action);
+            wakeWorker.notify_one();
+        }
+
+        /**
          * This method is called whenever the user agent disconnects from the
          * Twitch server.
          *
@@ -355,14 +372,17 @@ namespace Twitch {
          *     This is the connection to disconnect.
          *
          * @param[in] farewell
-         *     This is the message to include in the QUIT command to the
-         *     server, which is sent just before disconnecting.
+         *     If not empty, the user agent should sent a QUIT command before
+         *     disconnecting, and this is a message to include in the
+         *     QUIT command.
          */
         void Disconnect(
             Connection& connection,
-            const std::string farewell
+            const std::string farewell = ""
         ) {
-            connection.Send("QUIT :" + farewell + CRLF);
+            if (!farewell.empty()) {
+                connection.Send("QUIT :" + farewell + CRLF);
+            }
             connection.Disconnect();
             if (loggedOutDelegate != nullptr) {
                 loggedOutDelegate();
@@ -432,6 +452,9 @@ namespace Twitch {
                             connection->SetMessageReceivedDelegate(
                                 std::bind(&Impl::MessageReceived, this, std::placeholders::_1)
                             );
+                            connection->SetDisconnectedDelegate(
+                                std::bind(&Impl::ServerDisconnected, this)
+                            );
                             if (connection->Connect()) {
                                 connection->Send("PASS oauth:" + nextAction.token + CRLF);
                                 connection->Send("NICK " + nextAction.nickname + CRLF);
@@ -470,6 +493,10 @@ namespace Twitch {
                                     }
                                 }
                             }
+                        } break;
+
+                        case ActionType::ServerDisconnected: {
+                            Disconnect(*connection);
                         } break;
 
                         default: {
