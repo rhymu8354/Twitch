@@ -14,6 +14,7 @@
 #include <SystemAbstractions/StringExtensions.hpp>
 #include <Twitch/Connection.hpp>
 #include <Twitch/Messaging.hpp>
+#include <Twitch/TimeKeeper.hpp>
 #include <vector>
 
 namespace {
@@ -140,6 +141,25 @@ namespace {
         }
     };
 
+    /**
+     * This is a fake time-keeper which is used to test the Messaging class.
+     */
+    struct MockTimeKeeper
+        : public Twitch::TimeKeeper
+    {
+        // Properties
+
+        double currentTime = 0.0;
+
+        // Methods
+
+        // Twitch::TimeKeeper
+
+        virtual double GetCurrentTime() override {
+            return currentTime;
+        }
+    };
+
 }
 
 /**
@@ -160,6 +180,11 @@ struct MessagingTests
      * This is used to simulate the Twitch server.
      */
     std::shared_ptr< MockServer > mockServer = std::make_shared< MockServer >();
+
+    /**
+     * This is used to simulate real time, when testing timeouts.
+     */
+    std::shared_ptr< MockTimeKeeper > mockTimeKeeper = std::make_shared< MockTimeKeeper >();
 
     /**
      * This flag keeps track of whether or not the unit under test has created
@@ -218,6 +243,7 @@ struct MessagingTests
             return mockServer;
         };
         tmi.SetConnectionFactory(connectionFactory);
+        tmi.SetTimeKeeper(mockTimeKeeper);
     }
 
     virtual void TearDown() {
@@ -423,6 +449,66 @@ TEST_F(MessagingTests, ExtraMotdWhileAlreadyLoggedIn) {
 }
 
 TEST_F(MessagingTests, LogInFailureNoMotd) {
+    bool loggedIn = false;
+    bool loggedOut = false;
+    std::condition_variable wakeCondition;
+    std::mutex mutex;
+    tmi.SetLoggedInDelegate(
+        [
+            &loggedIn,
+            &wakeCondition,
+            &mutex
+        ]{
+            std::lock_guard< std::mutex > lock(mutex);
+            loggedIn = true;
+            wakeCondition.notify_one();
+        }
+    );
+    tmi.SetLoggedOutDelegate(
+        [
+            &loggedOut,
+            &wakeCondition,
+            &mutex
+        ]{
+            std::lock_guard< std::mutex > lock(mutex);
+            loggedOut = true;
+            wakeCondition.notify_one();
+        }
+    );
+    const std::string nickname = "ninja";
+    const std::string token = "alskdfjasdf87sdfsdffsd";
+    tmi.LogIn(nickname, token);
+    (void)mockServer->AwaitNickname();
+    mockServer->ClearLinesReceived();
+    {
+        std::unique_lock< std::mutex > lock(mutex);
+        ASSERT_FALSE(
+            wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [&loggedOut]{ return loggedOut; }
+            )
+        );
+    }
+    mockTimeKeeper->currentTime = 5.0;
+    {
+        std::unique_lock< std::mutex > lock(mutex);
+        EXPECT_TRUE(
+            wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [&loggedOut]{ return loggedOut; }
+            )
+        );
+    }
+    EXPECT_FALSE(loggedIn);
+    EXPECT_EQ(
+        (std::vector< std::string >{
+            "QUIT :Timeout waiting for MOTD"
+        }),
+        mockServer->GetLinesReceived()
+    );
+    EXPECT_TRUE(mockServer->IsDisconnected());
 }
 
 TEST_F(MessagingTests, LogInFailureUnexpectedDisconnect) {

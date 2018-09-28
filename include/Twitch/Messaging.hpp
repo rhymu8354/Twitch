@@ -10,6 +10,7 @@
  */
 
 #include "Connection.hpp"
+#include "TimeKeeper.hpp"
 
 #include <functional>
 #include <memory>
@@ -68,6 +69,15 @@ namespace Twitch {
          *     connection to the Twitch server.
          */
         void SetConnectionFactory(ConnectionFactory connectionFactory);
+
+        /**
+         * This method is used to provide the class with a means of
+         * measuring elapsed time periods.
+         *
+         * @param[in] timeKeeper
+         *     This is the object to use to measure elapsed time periods.
+         */
+        void SetTimeKeeper(std::shared_ptr< TimeKeeper > timeKeeper);
 
         /**
          * This method is called to set up a callback to happen when

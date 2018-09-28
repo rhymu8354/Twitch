@@ -7,9 +7,11 @@
  * © 2016-2018 by Richard Walters
  */
 
+#include <chrono>
 #include <condition_variable>
 #include <deque>
 #include <mutex>
+#include <queue>
 #include <string>
 #include <thread>
 #include <Twitch/Messaging.hpp>
@@ -22,6 +24,13 @@ namespace {
      * sent to or from Twitch chat servers.
      */
     const std::string CRLF = "\r\n";
+
+    /**
+     * This is the maximum amount of time to wait for the Twitch server to
+     * provide the Message Of The Day (MOTD), confirming a successful log-in,
+     * before timing out.
+     */
+    constexpr double LOG_IN_TIMEOUT_SECONDS = 5.0;
 
     /**
      * These are the states in which the Messaging class can be.
@@ -116,6 +125,41 @@ namespace {
         std::vector< std::string > parameters;
     };
 
+    /**
+     * This represents a condition the worker is awaiting, which
+     * might time out.
+     */
+    struct TimeoutCondition {
+        // Properties
+
+        /**
+         * This is the type of action which prompted the wait condition.
+         */
+        ActionType type;
+
+        /**
+         * This is the time, according to the time keeper, at which
+         * the condition will be considered as having timed out.
+         */
+        double expiration = 0.0;
+
+        // Methods
+
+        /**
+         * This method is used to sort timeout conditions by expiration time.
+         *
+         * @param[in] rhs
+         *     This is the other timeout condition to compare with this one.
+         *
+         * @return
+         *     This returns true if the other timeout condition will expire
+         *     first.
+         */
+        bool operator<(const TimeoutCondition& rhs) const {
+            return expiration > rhs.expiration;
+        }
+    };
+
 }
 
 namespace Twitch {
@@ -131,6 +175,11 @@ namespace Twitch {
          * connection to the Twitch server.
          */
         ConnectionFactory connectionFactory;
+
+        /**
+         * This is the object to use to measure elapsed time periods.
+         */
+        std::shared_ptr< TimeKeeper > timeKeeper;
 
         /**
          * This is the function to call when the user agent successfully logs
@@ -299,6 +348,28 @@ namespace Twitch {
         }
 
         /**
+         * This method is called whenever the user agent disconnects from the
+         * Twitch server.
+         *
+         * @param[in,out] connection
+         *     This is the connection to disconnect.
+         *
+         * @param[in] farewell
+         *     This is the message to include in the QUIT command to the
+         *     server, which is sent just before disconnecting.
+         */
+        void Disconnect(
+            Connection& connection,
+            const std::string farewell
+        ) {
+            connection.Send("QUIT :" + farewell + CRLF);
+            connection.Disconnect();
+            if (loggedOutDelegate != nullptr) {
+                loggedOutDelegate();
+            }
+        }
+
+        /**
          * This method signals the worker thread to stop.
          */
         void StopWorker() {
@@ -326,8 +397,28 @@ namespace Twitch {
             // (MOTD) from the server).
             bool loggedIn = false;
 
+            // This holds onto any conditions the worker is awaiting, which
+            // might time out.
+            std::priority_queue< TimeoutCondition > timeoutConditions;
+
             std::unique_lock< decltype(mutex) > lock(mutex);
             while (!stopWorker) {
+                lock.unlock();
+                if (!timeoutConditions.empty()) {
+                    const auto timeoutCondition = timeoutConditions.top();
+                    if (timeKeeper->GetCurrentTime() >= timeoutCondition.expiration) {
+                        switch (timeoutCondition.type) {
+                            case ActionType::LogIn: {
+                                Disconnect(*connection, "Timeout waiting for MOTD");
+                            }
+
+                            default: {
+                            } break;
+                        }
+                        timeoutConditions.pop();
+                    }
+                }
+                lock.lock();
                 while (!actions.empty()) {
                     const auto nextAction = actions.front();
                     actions.pop_front();
@@ -344,6 +435,12 @@ namespace Twitch {
                             if (connection->Connect()) {
                                 connection->Send("PASS oauth:" + nextAction.token + CRLF);
                                 connection->Send("NICK " + nextAction.nickname + CRLF);
+                                if (timeKeeper != nullptr) {
+                                    TimeoutCondition timeoutCondition;
+                                    timeoutCondition.type = ActionType::LogIn;
+                                    timeoutCondition.expiration = timeKeeper->GetCurrentTime() + LOG_IN_TIMEOUT_SECONDS;
+                                    timeoutConditions.push(timeoutCondition);
+                                }
                             } else {
                                 if (loggedOutDelegate != nullptr) {
                                     loggedOutDelegate();
@@ -353,11 +450,7 @@ namespace Twitch {
 
                         case ActionType::LogOut: {
                             if (connection != nullptr) {
-                                connection->Send("QUIT :" + nextAction.message + CRLF);
-                                connection->Disconnect();
-                                if (loggedOutDelegate != nullptr) {
-                                    loggedOutDelegate();
-                                }
+                                Disconnect(*connection, nextAction.message);
                             }
                         } break;
 
@@ -384,15 +477,28 @@ namespace Twitch {
                     }
                     lock.lock();
                 }
-                wakeWorker.wait(
-                    lock,
-                    [this]{
-                        return (
-                            stopWorker
-                            || !actions.empty()
-                        );
-                    }
-                );
+                if (!timeoutConditions.empty()) {
+                    wakeWorker.wait_for(
+                        lock,
+                        std::chrono::milliseconds(50),
+                        [this]{
+                            return (
+                                stopWorker
+                                || !actions.empty()
+                            );
+                        }
+                    );
+                } else {
+                    wakeWorker.wait(
+                        lock,
+                        [this]{
+                            return (
+                                stopWorker
+                                || !actions.empty()
+                            );
+                        }
+                    );
+                }
             }
         }
     };
@@ -410,6 +516,10 @@ namespace Twitch {
 
     void Messaging::SetConnectionFactory(ConnectionFactory connectionFactory) {
         impl_->connectionFactory = connectionFactory;
+    }
+
+    void Messaging::SetTimeKeeper(std::shared_ptr< TimeKeeper > timeKeeper) {
+        impl_->timeKeeper = timeKeeper;
     }
 
     void Messaging::SetLoggedInDelegate(LoggedInDelegate loggedInDelegate) {
@@ -443,4 +553,3 @@ namespace Twitch {
     }
 
 }
-

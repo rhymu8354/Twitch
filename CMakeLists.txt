@@ -8,6 +8,7 @@ set(This Twitch)
 set(Headers
     include/Twitch/Connection.hpp
     include/Twitch/Messaging.hpp
+    include/Twitch/TimeKeeper.hpp
 )
 
 set(Sources
