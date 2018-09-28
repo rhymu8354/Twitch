@@ -178,6 +178,13 @@ namespace Twitch {
          */
         std::string dataReceived;
 
+        /**
+         * This flag indicates whether or not the client has finished logging
+         * into the Twitch server (we've received the Message Of The Day
+         * (MOTD) from the server).
+         */
+        bool loggedIn = false;
+
         // Methods
 
         /**
@@ -297,9 +304,12 @@ namespace Twitch {
                     continue;
                 }
                 if (message.command == "376") { // RPL_ENDOFMOTD (RFC 1459)
+                    if (!loggedIn) {
+                        loggedIn = true;
                         if (loggedInDelegate != nullptr) {
                             loggedInDelegate();
                         }
+                    }
                 }
             }
         }

@@ -386,6 +386,48 @@ TEST_F(MessagingTests, LogInFailureToConnect) {
     }
 }
 
+TEST_F(MessagingTests, ExtraMotdWhileAlreadyLoggedIn) {
+    // Log in normally, before the "test" begins.
+    LogIn();
+
+    // Have the server send another MOTD, and make sure
+    // we don't receive an extra logged-in callback.
+    bool loggedIn = false;
+    std::condition_variable wakeCondition;
+    std::mutex mutex;
+    tmi.SetLoggedInDelegate(
+        [
+            &loggedIn,
+            &wakeCondition,
+            &mutex
+        ]{
+            std::lock_guard< std::mutex > lock(mutex);
+            loggedIn = true;
+            wakeCondition.notify_one();
+        }
+    );
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv 372 <user> :You are in a maze of twisty passages." + CRLF
+        + ":tmi.twitch.tv 376 <user> :>" + CRLF
+    );
+    {
+        std::unique_lock< std::mutex > lock(mutex);
+        EXPECT_FALSE(
+            wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [&loggedIn]{ return loggedIn; }
+            )
+        );
+    }
+}
+
+TEST_F(MessagingTests, LogInFailureNoMotd) {
+}
+
+TEST_F(MessagingTests, LogInFailureUnexpectedDisconnect) {
+}
+
 TEST_F(MessagingTests, ReceiveMessages) {
 }
 
