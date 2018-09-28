@@ -55,6 +55,11 @@ namespace {
          * Log out of Twitch chat, and close the active connection.
          */
         LogOut,
+
+        /**
+         * Process all messages received from the Twitch server.
+         */
+        ProcessMessagesReceived,
     };
 
     /**
@@ -165,31 +170,16 @@ namespace Twitch {
          */
         std::deque< Action > actions;
 
-        /**
-         * This is the interface to the current connection to the Twitch
-         * server, if we are connected.
-         */
-        std::shared_ptr< Connection > connection;
-
-        /**
-         * This is essentially just a buffer to receive raw characters from
-         * the Twitch server, until a complete line has been received, removed
-         * from this buffer, and handled appropriately.
-         */
-        std::string dataReceived;
-
-        /**
-         * This flag indicates whether or not the client has finished logging
-         * into the Twitch server (we've received the Message Of The Day
-         * (MOTD) from the server).
-         */
-        bool loggedIn = false;
-
         // Methods
 
         /**
          * This method extracts the next message received from the
          * Twitch server.
+         *
+         * @param[in,out] dataReceived
+         *      This is essentially just a buffer to receive raw characters
+         *      from the Twitch server, until a complete line has been
+         *      received, removed from this buffer, and handled appropriately.
          *
          * @param[out] message
          *     This is where to store the next message received from the
@@ -199,7 +189,10 @@ namespace Twitch {
          *     An indication of whether or not a complete line was
          *     extracted is returned.
          */
-        bool GetNextMessage(Message& message) {
+        bool GetNextMessage(
+            std::string& dataReceived,
+            Message& message
+        ) {
             // Extract the next line.
             const auto lineEnd = dataReceived.find(CRLF);
             if (lineEnd == std::string::npos) {
@@ -297,21 +290,12 @@ namespace Twitch {
          *     This is the raw text received from the Twitch server.
          */
         void MessageReceived(const std::string& rawText) {
-            dataReceived += rawText;
-            Message message;
-            while (GetNextMessage(message)) {
-                if (message.command.empty()) {
-                    continue;
-                }
-                if (message.command == "376") { // RPL_ENDOFMOTD (RFC 1459)
-                    if (!loggedIn) {
-                        loggedIn = true;
-                        if (loggedInDelegate != nullptr) {
-                            loggedInDelegate();
-                        }
-                    }
-                }
-            }
+            std::lock_guard< decltype(impl_->mutex) > lock(mutex);
+            Action action;
+            action.type = ActionType::ProcessMessagesReceived;
+            action.message = rawText;
+            actions.push_back(action);
+            wakeWorker.notify_one();
         }
 
         /**
@@ -328,11 +312,26 @@ namespace Twitch {
          * for the object.
          */
         void Worker() {
+            // This is the interface to the current connection to the Twitch
+            // server, if we are connected.
+            std::shared_ptr< Connection > connection;
+
+            // This is essentially just a buffer to receive raw characters from
+            // the Twitch server, until a complete line has been received, removed
+            // from this buffer, and handled appropriately.
+            std::string dataReceived;
+
+            // This flag indicates whether or not the client has finished logging
+            // into the Twitch server (we've received the Message Of The Day
+            // (MOTD) from the server).
+            bool loggedIn = false;
+
             std::unique_lock< decltype(mutex) > lock(mutex);
             while (!stopWorker) {
                 while (!actions.empty()) {
                     const auto nextAction = actions.front();
                     actions.pop_front();
+                    lock.unlock();
                     switch (nextAction.type) {
                         case ActionType::LogIn: {
                             if (connection != nullptr) {
@@ -362,9 +361,28 @@ namespace Twitch {
                             }
                         } break;
 
+                        case ActionType::ProcessMessagesReceived: {
+                            dataReceived += nextAction.message;
+                            Message message;
+                            while (GetNextMessage(dataReceived, message)) {
+                                if (message.command.empty()) {
+                                    continue;
+                                }
+                                if (message.command == "376") { // RPL_ENDOFMOTD (RFC 1459)
+                                    if (!loggedIn) {
+                                        loggedIn = true;
+                                        if (loggedInDelegate != nullptr) {
+                                            loggedInDelegate();
+                                        }
+                                    }
+                                }
+                            }
+                        } break;
+
                         default: {
                         } break;
                     }
+                    lock.lock();
                 }
                 wakeWorker.wait(
                     lock,
