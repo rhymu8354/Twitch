@@ -203,6 +203,21 @@ namespace {
     };
 
     /**
+     * This contains all the information received for a single Leave callback.
+     */
+    struct PartInfo {
+        /**
+         * This is the channel where the user left.
+         */
+        std::string channel;
+
+        /**
+         * This is the nickname of the user who left.
+         */
+        std::string user;
+    };
+
+    /**
      * This represents the user of the unit under test, and receives all
      * notifications, events, and other callbacks from the unit under test.
      */
@@ -214,6 +229,8 @@ namespace {
         bool loggedIn = false;
         bool loggedOut = false;
         std::vector< JoinInfo > joins;
+        std::vector< PartInfo > parts;
+        std::vector< Twitch::Messaging::MessageInfo > messages;
         std::condition_variable wakeCondition;
         std::mutex mutex;
 
@@ -247,6 +264,26 @@ namespace {
             );
         }
 
+        bool AwaitLeave() {
+            std::unique_lock< std::mutex > lock(mutex);
+            const auto numPartsBefore = parts.size();
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this, numPartsBefore]{ return parts.size() != numPartsBefore; }
+            );
+        }
+
+        bool AwaitMessage() {
+            std::unique_lock< std::mutex > lock(mutex);
+            const auto numMessagesBefore = messages.size();
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this, numMessagesBefore]{ return messages.size() != numMessagesBefore; }
+            );
+        }
+
         // Twitch::Messaging::User
 
         virtual void LogIn() override {
@@ -270,6 +307,26 @@ namespace {
             joinInfo.channel = channel;
             joinInfo.user = user;
             joins.push_back(joinInfo);
+            wakeCondition.notify_one();
+        }
+
+        virtual void Leave(
+            const std::string& channel,
+            const std::string& user
+        ) override {
+            std::lock_guard< std::mutex > lock(mutex);
+            PartInfo partInfo;
+            partInfo.channel = channel;
+            partInfo.user = user;
+            parts.push_back(partInfo);
+            wakeCondition.notify_one();
+        }
+
+        virtual void Message(
+            Twitch::Messaging::MessageInfo&& messageInfo
+        ) override {
+            std::lock_guard< std::mutex > lock(mutex);
+            messages.push_back(std::move(messageInfo));
             wakeCondition.notify_one();
         }
 
@@ -330,6 +387,18 @@ struct MessagingTests
         );
         (void)user->AwaitLogIn();
         mockServer->ClearLinesReceived();
+    }
+
+    /**
+     * This is a convenience method which performs all the necessary steps to
+     * join a channel.
+     */
+    void Join(const std::string& channel) {
+        tmi.Join(channel);
+        (void)mockServer->AwaitLineReceived("JOIN #" + channel);
+        mockServer->ReturnToClient(
+            ":foobar1124!foobar1124@foobar1124.tmi.twitch.tv JOIN #" + channel + CRLF
+        );
     }
 
     // ::testing::Test
@@ -491,19 +560,49 @@ TEST_F(MessagingTests, JoinChannelWhenNotConnected) {
 }
 
 TEST_F(MessagingTests, LeaveChannel) {
-    // TODO: Needs to be implemented
+    // Log in and join a channel.
+    LogIn();
+    Join("foobar1125");
+
+    // Attempt to leave a channel.  Wait for the mock server
+    // to receive the PART command, and then have it issue back
+    // the expected reponses.
+    tmi.Leave("foobar1125");
+    EXPECT_TRUE(mockServer->AwaitLineReceived("PART #foobar1125"));
+    mockServer->ReturnToClient(
+        ":foobar1124!foobar1124@foobar1124.tmi.twitch.tv PART #foobar1125" + CRLF
+    );
+    ASSERT_TRUE(user->AwaitLeave());
+    ASSERT_EQ(1, user->parts.size());
+    EXPECT_EQ("foobar1125", user->parts[0].channel);
+    EXPECT_EQ("foobar1124", user->parts[0].user);
 }
 
 TEST_F(MessagingTests, ReceiveMessages) {
-    // Log in normally, before the "test" begins.
+    // Log in and join a channel.
     LogIn();
+    Join("foobar1125");
 
     // Have the pretend Twitch server simulate someone else chatting in the
     // room.
+    mockServer->ReturnToClient(
+        ":foobar1126!foobar1126@foobar1126.tmi.twitch.tv PRIVMSG #foobar1125 :Hello, World!" + CRLF
+    );
 
-    // TODO: Needs to be implemented
+    // Wait for the message to be received.
+    ASSERT_TRUE(user->AwaitMessage());
+    ASSERT_EQ(1, user->messages.size());
+    EXPECT_EQ("foobar1125", user->messages[0].channel);
+    EXPECT_EQ("foobar1126", user->messages[0].user);
+    EXPECT_EQ("Hello, World!", user->messages[0].message);
 }
 
 TEST_F(MessagingTests, SendMessage) {
-    // TODO: Needs to be implemented
+    // Log in and join a channel.
+    LogIn();
+    Join("foobar1125");
+
+    // Send a message to the channel we just joined.
+    tmi.SendMessage("foobar1125", "Hello, World!");
+    EXPECT_TRUE(mockServer->AwaitLineReceived("PRIVMSG #foobar1125 :Hello, World!"));
 }

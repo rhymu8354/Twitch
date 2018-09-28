@@ -79,6 +79,16 @@ namespace {
          * Join a chat room.
          */
         Join,
+
+        /**
+         * Leave a chat room.
+         */
+        Leave,
+
+        /**
+         * Send a message to a channel.
+         */
+        SendMessage,
     };
 
     /**
@@ -498,6 +508,36 @@ namespace Twitch {
                                     const auto nickname = message.prefix.substr(0, nicknameDelimiter);
                                     const auto channel = message.parameters[0].substr(1);
                                     user->Join(channel, nickname);
+                                } else if (message.command == "PART") {
+                                    if (
+                                        (message.parameters.size() < 1)
+                                        && (message.parameters[0].length() < 2)
+                                    ) {
+                                        continue;
+                                    }
+                                    const auto nicknameDelimiter = message.prefix.find('!');
+                                    if (nicknameDelimiter == std::string::npos) {
+                                        continue;
+                                    }
+                                    const auto nickname = message.prefix.substr(0, nicknameDelimiter);
+                                    const auto channel = message.parameters[0].substr(1);
+                                    user->Leave(channel, nickname);
+                                } else if (message.command == "PRIVMSG") {
+                                    if (
+                                        (message.parameters.size() < 2)
+                                        && (message.parameters[0].length() < 2)
+                                    ) {
+                                        continue;
+                                    }
+                                    const auto nicknameDelimiter = message.prefix.find('!');
+                                    if (nicknameDelimiter == std::string::npos) {
+                                        continue;
+                                    }
+                                    MessageInfo messageInfo;
+                                    messageInfo.user = message.prefix.substr(0, nicknameDelimiter);
+                                    messageInfo.channel = message.parameters[0].substr(1);
+                                    messageInfo.message = message.parameters[1];
+                                    user->Message(std::move(messageInfo));
                                 }
                             }
                         } break;
@@ -511,6 +551,20 @@ namespace Twitch {
                                 break;
                             }
                             connection->Send("JOIN #" + nextAction.nickname + CRLF);
+                        } break;
+
+                        case ActionType::Leave: {
+                            if (connection == nullptr) {
+                                break;
+                            }
+                            connection->Send("PART #" + nextAction.nickname + CRLF);
+                        } break;
+
+                        case ActionType::SendMessage: {
+                            if (connection == nullptr) {
+                                break;
+                            }
+                            connection->Send("PRIVMSG #" + nextAction.nickname + " :" + nextAction.message + CRLF);
                         } break;
 
                         default: {
@@ -594,6 +648,28 @@ namespace Twitch {
         Action action;
         action.type = ActionType::Join;
         action.nickname = channel;
+        impl_->actions.push_back(action);
+        impl_->wakeWorker.notify_one();
+    }
+
+    void Messaging::Leave(const std::string& channel) {
+        std::lock_guard< decltype(impl_->mutex) > lock(impl_->mutex);
+        Action action;
+        action.type = ActionType::Leave;
+        action.nickname = channel;
+        impl_->actions.push_back(action);
+        impl_->wakeWorker.notify_one();
+    }
+
+    void Messaging::SendMessage(
+        const std::string& channel,
+        const std::string& message
+    ) {
+        std::lock_guard< decltype(impl_->mutex) > lock(impl_->mutex);
+        Action action;
+        action.type = ActionType::SendMessage;
+        action.nickname = channel;
+        action.message = message;
         impl_->actions.push_back(action);
         impl_->wakeWorker.notify_one();
     }

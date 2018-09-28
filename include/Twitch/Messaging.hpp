@@ -33,6 +33,27 @@ namespace Twitch {
         typedef std::function< std::shared_ptr< Connection >() > ConnectionFactory;
 
         /**
+         * This contains all the information about a message received in a
+         * channel.
+         */
+        struct MessageInfo {
+            /**
+             * This is the channel to which the message was sent.
+             */
+            std::string channel;
+
+            /**
+             * This is the user who sent the message.
+             */
+            std::string user;
+
+            /**
+             * This is the content of the message.
+             */
+            std::string message;
+        };
+
+        /**
          * This is a base class and interface to be implemented by the user of
          * this class, in order to receive notifications, events, and other
          * callbacks from the class.
@@ -72,6 +93,35 @@ namespace Twitch {
                 const std::string& user
             ) {
             }
+
+            /**
+             * This is called whenever a user leaves a channel.
+             *
+             * @param[in] channel
+             *     This is the name of the channel the user left.
+             *
+             * @param[in] user
+             *     This is the nickname of the user who left the channel.
+             */
+            virtual void Leave(
+                const std::string& channel,
+                const std::string& user
+            ) {
+            }
+
+            /**
+             * This is called whenever the user receives a message sent to a
+             * channel.
+             *
+             * @param[in] messageInfo
+             *     This contains all the information about the received
+             *     message.
+             */
+            virtual void Message(
+                MessageInfo&& messageInfo
+            ) {
+            }
+
         };
 
         // Lifecycle management
@@ -152,6 +202,28 @@ namespace Twitch {
          *     This is the name of the channel to join.
          */
         void Join(const std::string& channel);
+
+        /**
+         * This method starts the process of leaving a Twitch chat channel.
+         *
+         * @param[in] channel
+         *     This is the name of the channel to leave.
+         */
+        void Leave(const std::string& channel);
+
+        /**
+         * This method sends a message to Twitch chat channel.
+         *
+         * @param[in] channel
+         *     This is the name of the channel to which to send the message.
+         *
+         * @param[in] message
+         *     This is the content of the message to send.
+         */
+        void SendMessage(
+            const std::string& channel,
+            const std::string& message
+        );
 
         // Private properties
     private:
