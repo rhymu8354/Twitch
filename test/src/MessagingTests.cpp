@@ -6,6 +6,7 @@
  * © 2018 by Richard Walters
  */
 
+#include <algorithm>
 #include <condition_variable>
 #include <gtest/gtest.h>
 #include <memory>
@@ -54,6 +55,21 @@ namespace {
                 lock,
                 std::chrono::milliseconds(100),
                 [this]{ return !nicknameOffered.empty(); }
+            );
+        }
+
+        bool AwaitLineReceived(const std::string& line) {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this, line]{
+                    return std::find(
+                        linesReceived.begin(),
+                        linesReceived.end(),
+                        line
+                    ) != linesReceived.end();
+                }
             );
         }
 
@@ -134,17 +150,18 @@ namespace {
                 return;
             }
             const auto line = dataReceived.substr(0, lineEnd);
+            std::lock_guard< std::mutex > lock(mutex);
             linesReceived.push_back(line);
             dataReceived = dataReceived.substr(lineEnd + CRLF.length());
             if (line.substr(0, 5) == "PASS ") {
                 passwordOffered = line.substr(5);
                 passwordOffered = SystemAbstractions::Trim(passwordOffered);
             } else if (line.substr(0, 5) == "NICK ") {
-                std::lock_guard< std::mutex > lock(mutex);
                 nicknameOffered = line.substr(5);
                 nicknameOffered = SystemAbstractions::Trim(nicknameOffered);
                 wakeCondition.notify_one();
             }
+            wakeCondition.notify_one();
         }
 
         virtual void Disconnect() override {
@@ -224,7 +241,7 @@ struct MessagingTests
                 wakeCondition.notify_one();
             }
         );
-        const std::string nickname = "ninja";
+        const std::string nickname = "foobar1124";
         const std::string token = "alskdfjasdf87sdfsdffsd";
         tmi.LogIn(nickname, token);
         (void)mockServer->AwaitNickname();
@@ -276,7 +293,7 @@ TEST_F(MessagingTests, LogIntoChat) {
             wakeCondition.notify_one();
         }
     );
-    const std::string nickname = "ninja";
+    const std::string nickname = "foobar1124";
     const std::string token = "alskdfjasdf87sdfsdffsd";
     tmi.LogIn(nickname, token);
     EXPECT_TRUE(mockServer->AwaitNickname());
@@ -374,7 +391,7 @@ TEST_F(MessagingTests, LogInWhenAlreadyLoggedIn) {
             wakeCondition.notify_one();
         }
     );
-    const std::string nickname = "ninja";
+    const std::string nickname = "foobar1124";
     const std::string token = "alskdfjasdf87sdfsdffsd";
     tmi.LogIn(nickname, token);
     {
@@ -408,7 +425,7 @@ TEST_F(MessagingTests, LogInFailureToConnect) {
             wakeCondition.notify_one();
         }
     );
-    const std::string nickname = "ninja";
+    const std::string nickname = "foobar1124";
     const std::string token = "alskdfjasdf87sdfsdffsd";
     tmi.LogIn(nickname, token);
     {
@@ -486,7 +503,7 @@ TEST_F(MessagingTests, LogInFailureNoMotd) {
             wakeCondition.notify_one();
         }
     );
-    const std::string nickname = "ninja";
+    const std::string nickname = "foobar1124";
     const std::string token = "alskdfjasdf87sdfsdffsd";
     tmi.LogIn(nickname, token);
     (void)mockServer->AwaitNickname();
@@ -549,7 +566,7 @@ TEST_F(MessagingTests, LogInFailureUnexpectedDisconnect) {
             wakeCondition.notify_one();
         }
     );
-    const std::string nickname = "ninja";
+    const std::string nickname = "foobar1124";
     const std::string token = "alskdfjasdf87sdfsdffsd";
     tmi.LogIn(nickname, token);
     EXPECT_TRUE(mockServer->AwaitNickname());
@@ -584,8 +601,73 @@ TEST_F(MessagingTests, LogInFailureUnexpectedDisconnect) {
     EXPECT_TRUE(mockServer->IsDisconnected());
 }
 
+TEST_F(MessagingTests, JoinChannel) {
+    // Log in normally, before the "test" begins.
+    LogIn();
+
+    // Attempt to join a channel.  Wait for the mock server
+    // to receive the JOIN command, and then have it issue back
+    // the expected reponses.
+    bool joined = false;
+    std::string joinChannel;
+    std::string joinUser;
+    std::condition_variable wakeCondition;
+    std::mutex mutex;
+    tmi.SetJoinDelegate(
+        [
+            &joined,
+            &joinChannel,
+            &joinUser,
+            &wakeCondition,
+            &mutex
+        ](
+            const std::string& channel,
+            const std::string& user
+        ){
+            std::lock_guard< std::mutex > lock(mutex);
+            joined = true;
+            joinChannel = channel;
+            joinUser = user;
+            wakeCondition.notify_one();
+        }
+    );
+    tmi.Join("foobar1125");
+    EXPECT_TRUE(mockServer->AwaitLineReceived("JOIN #foobar1125"));
+    mockServer->ReturnToClient(
+        ":foobar1124!foobar1124@foobar1124.tmi.twitch.tv JOIN #foobar1125" + CRLF
+    );
+    {
+        std::unique_lock< std::mutex > lock(mutex);
+        ASSERT_TRUE(
+            wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [&joined]{ return joined; }
+            )
+        );
+    }
+    EXPECT_EQ("foobar1125", joinChannel);
+    EXPECT_EQ("foobar1124", joinUser);
+}
+
+TEST_F(MessagingTests, JoinChannelWhenNotConnected) {
+    // TODO: Needs to be implemented
+}
+
+TEST_F(MessagingTests, LeaveChannel) {
+    // TODO: Needs to be implemented
+}
+
 TEST_F(MessagingTests, ReceiveMessages) {
+    // Log in normally, before the "test" begins.
+    LogIn();
+
+    // Have the pretend Twitch server simulate someone else chatting in the
+    // room.
+
+    // TODO: Needs to be implemented
 }
 
 TEST_F(MessagingTests, SendMessage) {
+    // TODO: Needs to be implemented
 }

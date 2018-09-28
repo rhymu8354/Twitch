@@ -74,6 +74,11 @@ namespace {
          * Handle when the server closes its end of the connection.
          */
         ServerDisconnected,
+
+        /**
+         * Join a chat room.
+         */
+        Join,
     };
 
     /**
@@ -87,8 +92,8 @@ namespace {
         ActionType type;
 
         /**
-         * This is used with the LogIn action, to provide the client
-         * with the nickname to be used in the chat session.
+         * This is used with multiple actions, to provide the client
+         * with the primary nickname associated with the command.
          */
         std::string nickname;
 
@@ -197,6 +202,8 @@ namespace Twitch {
          * logging out of the Twitch server.
          */
         LoggedOutDelegate loggedOutDelegate;
+
+        JoinDelegate joinDelegate;
 
         /**
          * This is used to synchronize access to the object.
@@ -491,12 +498,32 @@ namespace Twitch {
                                             loggedInDelegate();
                                         }
                                     }
+                                } else if (message.command == "JOIN") {
+                                    if (
+                                        (message.parameters.size() < 1)
+                                        && (message.parameters[0].length() < 2)
+                                    ) {
+                                        continue;
+                                    }
+                                    const auto nicknameDelimiter = message.prefix.find('!');
+                                    if (nicknameDelimiter == std::string::npos) {
+                                        continue;
+                                    }
+                                    const auto nickname = message.prefix.substr(0, nicknameDelimiter);
+                                    const auto channel = message.parameters[0].substr(1);
+                                    if (joinDelegate != nullptr) {
+                                        joinDelegate(channel, nickname);
+                                    }
                                 }
                             }
                         } break;
 
                         case ActionType::ServerDisconnected: {
                             Disconnect(*connection);
+                        } break;
+
+                        case ActionType::Join: {
+                            connection->Send("JOIN #" + nextAction.nickname + CRLF);
                         } break;
 
                         default: {
@@ -557,6 +584,10 @@ namespace Twitch {
         impl_->loggedOutDelegate = loggedOutDelegate;
     }
 
+    void Messaging::SetJoinDelegate(JoinDelegate joinDelegate) {
+        impl_->joinDelegate = joinDelegate;
+    }
+
     void Messaging::LogIn(
         const std::string& nickname,
         const std::string& token
@@ -575,6 +606,15 @@ namespace Twitch {
         Action action;
         action.type = ActionType::LogOut;
         action.message = farewell;
+        impl_->actions.push_back(action);
+        impl_->wakeWorker.notify_one();
+    }
+
+    void Messaging::Join(const std::string& channel) {
+        std::lock_guard< decltype(impl_->mutex) > lock(impl_->mutex);
+        Action action;
+        action.type = ActionType::Join;
+        action.nickname = channel;
         impl_->actions.push_back(action);
         impl_->wakeWorker.notify_one();
     }

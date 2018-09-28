@@ -45,6 +45,13 @@ namespace Twitch {
          */
         typedef std::function< void() > LoggedOutDelegate;
 
+        typedef std::function<
+            void(
+                const std::string& channel,
+                const std::string& user
+            )
+        > JoinDelegate;
+
         // Lifecycle management
     public:
         ~Messaging() noexcept;
@@ -99,6 +106,8 @@ namespace Twitch {
          */
         void SetLoggedOutDelegate(LoggedOutDelegate loggedOutDelegate);
 
+        void SetJoinDelegate(JoinDelegate joinDelegate);
+
         /**
          * This method starts the process of logging into the Twitch server.
          *
@@ -124,6 +133,14 @@ namespace Twitch {
          *     Twitch server just before the connection is closed.
          */
         void LogOut(const std::string& farewell);
+
+        /**
+         * This method starts the process of joining a Twitch chat channel.
+         *
+         * @param[in] channel
+         *     This is the name of the channel to join.
+         */
+        void Join(const std::string& channel);
 
         // Private properties
     private:
