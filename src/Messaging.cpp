@@ -256,6 +256,18 @@ namespace Twitch {
             std::string& dataReceived,
             Message& message
         ) {
+            // This tracks the current state of the state machine used
+            // in this function to parse the raw text of the message.
+            enum class State {
+                LineFirstCharacter,
+                Prefix,
+                CommandFirstCharacter,
+                CommandNotFirstCharacter,
+                ParameterFirstCharacter,
+                ParameterNotFirstCharacter,
+                Trailer,
+            } state = State::LineFirstCharacter;
+
             // Extract the next line.
             const auto lineEnd = dataReceived.find(CRLF);
             if (lineEnd == std::string::npos) {
@@ -268,77 +280,78 @@ namespace Twitch {
 
             // Unpack the message from the line.
             size_t offset = 0;
-            int state = 0;
             message = Message();
             while (offset < line.length()) {
                 switch (state) {
                     // First character of the line.  It could be ':',
                     // which signals a prefix, or it's the first character
                     // of the command.
-                    case 0: {
+                    case State::LineFirstCharacter: {
                         if (line[offset] == ':') {
-                            state = 1;
+                            state = State::Prefix;
                         } else {
+                            state = State::CommandNotFirstCharacter;
+                            message.command += line[offset];
                         }
                     } break;
 
                     // Prefix
-                    case 1: {
+                    case State::Prefix: {
                         if (line[offset] == ' ') {
-                            state = 2;
+                            state = State::CommandFirstCharacter;
                         } else {
                             message.prefix += line[offset];
                         }
                     } break;
 
                     // First character of command
-                    case 2: {
+                    case State::CommandFirstCharacter: {
                         if (line[offset] != ' ') {
-                            state = 3;
+                            state = State::CommandNotFirstCharacter;
                             message.command += line[offset];
                         }
                     } break;
 
                     // Command
-                    case 3: {
+                    case State::CommandNotFirstCharacter: {
                         if (line[offset] == ' ') {
-                            state = 4;
+                            state = State::ParameterFirstCharacter;
                         } else {
                             message.command += line[offset];
                         }
                     } break;
 
                     // First character of parameter
-                    case 4: {
+                    case State::ParameterFirstCharacter: {
                         if (line[offset] == ':') {
-                            state = 6;
+                            state = State::Trailer;
                             message.parameters.push_back("");
                         } else if (line[offset] != ' ') {
-                            state = 5;
+                            state = State::ParameterNotFirstCharacter;
                             message.parameters.push_back(line.substr(offset, 1));
                         }
                     } break;
 
                     // Parameter (not last, or last having no spaces)
-                    case 5: {
+                    case State::ParameterNotFirstCharacter: {
                         if (line[offset] == ' ') {
-                            state = 4;
+                            state = State::ParameterFirstCharacter;
                         } else {
                             message.parameters.back() += line[offset];
                         }
                     } break;
 
                     // Last Parameter (may include spaces)
-                    case 6: {
+                    case State::Trailer: {
                         message.parameters.back() += line[offset];
                     } break;
                 }
                 ++offset;
             }
             if (
-                (state == 0)
-                || (state == 1)
-                || (state == 2)
+                (state == State::LineFirstCharacter)
+                || (state == State::Prefix)
+                || (state == State::CommandFirstCharacter)
             ) {
                 message.command.clear();
             }
