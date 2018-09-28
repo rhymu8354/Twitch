@@ -578,6 +578,11 @@ TEST_F(MessagingTests, LeaveChannel) {
     EXPECT_EQ("foobar1124", user->parts[0].user);
 }
 
+TEST_F(MessagingTests, LeaveChannelWhenNotConnected) {
+    tmi.Leave("foobar1125");
+    EXPECT_FALSE(mockServer->AwaitLineReceived("PART #foobar1125"));
+}
+
 TEST_F(MessagingTests, ReceiveMessages) {
     // Log in and join a channel.
     LogIn();
@@ -605,4 +610,9 @@ TEST_F(MessagingTests, SendMessage) {
     // Send a message to the channel we just joined.
     tmi.SendMessage("foobar1125", "Hello, World!");
     EXPECT_TRUE(mockServer->AwaitLineReceived("PRIVMSG #foobar1125 :Hello, World!"));
+}
+
+TEST_F(MessagingTests, SendMessageWhenNotConnected) {
+    tmi.SendMessage("foobar1125", "Hello, World!");
+    EXPECT_FALSE(mockServer->AwaitLineReceived("PRIVMSG #foobar1125 :Hello, World!"));
 }
