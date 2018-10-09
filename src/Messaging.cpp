@@ -366,7 +366,7 @@ namespace Twitch {
          *     This is the raw text received from the Twitch server.
          */
         void MessageReceived(const std::string& rawText) {
-            std::lock_guard< decltype(impl_->mutex) > lock(mutex);
+            std::lock_guard< decltype(mutex) > lock(mutex);
             Action action;
             action.type = ActionType::ProcessMessagesReceived;
             action.message = rawText;
@@ -379,7 +379,7 @@ namespace Twitch {
          * connection.
          */
         void ServerDisconnected() {
-            std::lock_guard< decltype(impl_->mutex) > lock(mutex);
+            std::lock_guard< decltype(mutex) > lock(mutex);
             Action action;
             action.type = ActionType::ServerDisconnected;
             actions.push_back(action);
