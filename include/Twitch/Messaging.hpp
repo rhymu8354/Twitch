@@ -15,6 +15,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <SystemAbstractions/DiagnosticsSender.hpp>
 
 namespace Twitch {
 
@@ -138,6 +139,27 @@ namespace Twitch {
          * This is the default constructor.
          */
         Messaging();
+
+        /**
+         * This method forms a new subscription to diagnostic
+         * messages published by the transport.
+         *
+         * @param[in] delegate
+         *     This is the function to call to deliver messages
+         *     to the subscriber.
+         *
+         * @param[in] minLevel
+         *     This is the minimum level of message that this subscriber
+         *     desires to receive.
+         *
+         * @return
+         *     A function is returned which may be called
+         *     to terminate the subscription.
+         */
+        SystemAbstractions::DiagnosticsSender::UnsubscribeDelegate SubscribeToDiagnostics(
+            SystemAbstractions::DiagnosticsSender::DiagnosticMessageDelegate delegate,
+            size_t minLevel = 0
+        );
 
         /**
          * This method is used to provide the class with a means of

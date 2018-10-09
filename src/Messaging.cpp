@@ -191,6 +191,12 @@ namespace Twitch {
         // Properties
 
         /**
+         * This is a helper object used to generate and publish
+         * diagnostic messages.
+         */
+        SystemAbstractions::DiagnosticsSender diagnosticsSender;
+
+        /**
          * This is the function to call in order to make a new
          * connection to the Twitch server.
          */
@@ -236,6 +242,14 @@ namespace Twitch {
         // Methods
 
         /**
+         * This is the constructor for the structure.
+         */
+        Impl()
+            : diagnosticsSender("TMI")
+        {
+        }
+
+        /**
          * This method extracts the next message received from the
          * Twitch server.
          *
@@ -274,6 +288,7 @@ namespace Twitch {
                 return false;
             }
             const auto line = dataReceived.substr(0, lineEnd);
+            diagnosticsSender.SendDiagnosticInformationString(0, "> " + line);
 
             // Remove the line from the buffer.
             dataReceived = dataReceived.substr(lineEnd + CRLF.length());
@@ -359,7 +374,32 @@ namespace Twitch {
         }
 
         /**
-         * This method is called to whenever any message is received from the
+         * This method is called to send a raw line of text
+         * to the Twitch server.  Do not include the line terminator (CRLF),
+         * as this method adds one to the end when sending the line.
+         *
+         * @param[in,out] connection
+         *     This is the connection to use to send the message.
+         *
+         * @param[in] rawLine
+         *     This is the raw line of text to send to the Twitch server.
+         *     Do not include the line terminator (CRLF),
+         *     as this method adds one to the end when sending the line.
+         */
+        void SendLineToTwitchServer(
+            Connection& connection,
+            const std::string& rawLine
+        ) {
+            if (rawLine.substr(0, 11) == "PASS oauth:") {
+                diagnosticsSender.SendDiagnosticInformationString(0, "< PASS oauth:**********************");
+            } else {
+                diagnosticsSender.SendDiagnosticInformationString(0, "< " + rawLine);
+            }
+            connection.Send(rawLine + CRLF);
+        }
+
+        /**
+         * This method is called whenever any message is received from the
          * Twitch server for the user agent.
          *
          * @param[in] rawText
@@ -476,8 +516,8 @@ namespace Twitch {
                                 std::bind(&Impl::ServerDisconnected, this)
                             );
                             if (connection->Connect()) {
-                                connection->Send("PASS oauth:" + nextAction.token + CRLF);
-                                connection->Send("NICK " + nextAction.nickname + CRLF);
+                                SendLineToTwitchServer(*connection, "PASS oauth:" + nextAction.token);
+                                SendLineToTwitchServer(*connection, "NICK " + nextAction.nickname);
                                 if (timeKeeper != nullptr) {
                                     TimeoutCondition timeoutCondition;
                                     timeoutCondition.type = ActionType::LogIn;
@@ -513,7 +553,7 @@ namespace Twitch {
                                     }
                                     const auto server = message.parameters[0];
                                     if (connection != nullptr) {
-                                        connection->Send("PONG :" + server + CRLF);
+                                        SendLineToTwitchServer(*connection, "PONG :" + server);
                                     }
                                 } else if (message.command == "JOIN") {
                                     if (
@@ -571,21 +611,21 @@ namespace Twitch {
                             if (connection == nullptr) {
                                 break;
                             }
-                            connection->Send("JOIN #" + nextAction.nickname + CRLF);
+                            SendLineToTwitchServer(*connection, "JOIN #" + nextAction.nickname);
                         } break;
 
                         case ActionType::Leave: {
                             if (connection == nullptr) {
                                 break;
                             }
-                            connection->Send("PART #" + nextAction.nickname + CRLF);
+                            SendLineToTwitchServer(*connection, "PART #" + nextAction.nickname);
                         } break;
 
                         case ActionType::SendMessage: {
                             if (connection == nullptr) {
                                 break;
                             }
-                            connection->Send("PRIVMSG #" + nextAction.nickname + " :" + nextAction.message + CRLF);
+                            SendLineToTwitchServer(*connection, "PRIVMSG #" + nextAction.nickname + " :" + nextAction.message);
                         } break;
 
                         default: {
@@ -628,6 +668,13 @@ namespace Twitch {
         : impl_ (new Impl())
     {
         impl_->worker = std::thread(&Impl::Worker, impl_.get());
+    }
+
+    SystemAbstractions::DiagnosticsSender::UnsubscribeDelegate Messaging::SubscribeToDiagnostics(
+        SystemAbstractions::DiagnosticsSender::DiagnosticMessageDelegate delegate,
+        size_t minLevel
+    ) {
+        return impl_->diagnosticsSender.SubscribeToDiagnostics(delegate, minLevel);
     }
 
     void Messaging::SetConnectionFactory(ConnectionFactory connectionFactory) {

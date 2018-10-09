@@ -420,6 +420,81 @@ struct MessagingTests
     }
 };
 
+TEST_F(MessagingTests, DiagnosticsSubscription) {
+    std::vector< std::string > capturedDiagnosticMessages;
+    tmi.SubscribeToDiagnostics(
+        [&capturedDiagnosticMessages](
+            std::string senderName,
+            size_t level,
+            std::string message
+        ){
+            capturedDiagnosticMessages.push_back(
+                SystemAbstractions::sprintf(
+                    "%s[%zu]: %s",
+                    senderName.c_str(),
+                    level,
+                    message.c_str()
+                )
+            );
+        }
+    );
+    const std::string nickname = "foobar1124";
+    const std::string token = "alskdfjasdf87sdfsdffsd";
+    tmi.LogIn(nickname, token);
+    (void)mockServer->AwaitNickname();
+    (void)user->AwaitLogIn();
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv 372 <user> :You are in a maze of twisty passages." + CRLF
+        + ":tmi.twitch.tv 376 <user> :>" + CRLF
+    );
+    (void)user->AwaitLogIn();
+    EXPECT_EQ(
+        (std::vector< std::string >{
+            "TMI[0]: < PASS oauth:**********************",
+            "TMI[0]: < NICK foobar1124",
+            "TMI[0]: > :tmi.twitch.tv 372 <user> :You are in a maze of twisty passages.",
+            "TMI[0]: > :tmi.twitch.tv 376 <user> :>",
+        }),
+        capturedDiagnosticMessages
+    );
+}
+
+TEST_F(MessagingTests, DiagnosticsUnsubscription) {
+    std::vector< std::string > capturedDiagnosticMessages;
+    const auto unsubscribe = tmi.SubscribeToDiagnostics(
+        [&capturedDiagnosticMessages](
+            std::string senderName,
+            size_t level,
+            std::string message
+        ){
+            capturedDiagnosticMessages.push_back(
+                SystemAbstractions::sprintf(
+                    "%s[%zu]: %s",
+                    senderName.c_str(),
+                    level,
+                    message.c_str()
+                )
+            );
+        }
+    );
+    unsubscribe();
+    const std::string nickname = "foobar1124";
+    const std::string token = "alskdfjasdf87sdfsdffsd";
+    tmi.LogIn(nickname, token);
+    (void)mockServer->AwaitNickname();
+    (void)user->AwaitLogIn();
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv 372 <user> :You are in a maze of twisty passages." + CRLF
+        + ":tmi.twitch.tv 376 <user> :>" + CRLF
+    );
+    (void)user->AwaitLogIn();
+    EXPECT_EQ(
+        (std::vector< std::string >{
+        }),
+        capturedDiagnosticMessages
+    );
+}
+
 TEST_F(MessagingTests, LogIntoChat) {
     const std::string nickname = "foobar1124";
     const std::string token = "alskdfjasdf87sdfsdffsd";
