@@ -43,6 +43,19 @@ namespace {
         NotLoggedIn,
 
         /**
+         * The client is logging in, has sent a request for a capabilities
+         * list, and is awaiting a response, before completing the login.
+         */
+        AwaitingCaps,
+
+        /**
+         * The client is logging in, has completed the capabilities handshake,
+         * and is now awaiting the message of the day (MOTD), before
+         * completing the login.
+         */
+        AwaitingMotd,
+
+        /**
          * The client has completely logged into the server,
          * with an active connection.
          */
@@ -59,6 +72,12 @@ namespace {
          * connection to log in.
          */
         LogIn,
+
+        /**
+         * Establish a new connection to Twitch chat, and use the new
+         * connection to log in.
+         */
+        AwaitMotd,
 
         /**
          * Log out of Twitch chat, and close the active connection.
@@ -481,6 +500,16 @@ namespace Twitch {
             // might time out.
             std::priority_queue< TimeoutCondition > timeoutConditions;
 
+            // This keeps track of the current state of the connection.
+            State state = State::NotLoggedIn;
+
+            // This is the nickname to use when logging in.
+            std::string nickname;
+
+            // This is the OAuth token to be used to authenticate
+            // with the server.
+            std::string token;
+
             std::unique_lock< decltype(mutex) > lock(mutex);
             while (!stopWorker) {
                 lock.unlock();
@@ -489,7 +518,15 @@ namespace Twitch {
                     if (timeKeeper->GetCurrentTime() >= timeoutCondition.expiration) {
                         switch (timeoutCondition.type) {
                             case ActionType::LogIn: {
-                                Disconnect(*connection, "Timeout waiting for MOTD");
+                                if (state == State::AwaitingCaps) {
+                                    Disconnect(*connection, "Timeout waiting for capability list");
+                                }
+                            }
+
+                            case ActionType::AwaitMotd: {
+                                if (state == State::AwaitingMotd) {
+                                    Disconnect(*connection, "Timeout waiting for MOTD");
+                                }
                             }
 
                             default: {
@@ -516,8 +553,10 @@ namespace Twitch {
                                 std::bind(&Impl::ServerDisconnected, this)
                             );
                             if (connection->Connect()) {
-                                SendLineToTwitchServer(*connection, "PASS oauth:" + nextAction.token);
-                                SendLineToTwitchServer(*connection, "NICK " + nextAction.nickname);
+                                SendLineToTwitchServer(*connection, "CAP LS 302");
+                                nickname = nextAction.nickname;
+                                token = nextAction.token;
+                                state = State::AwaitingCaps;
                                 if (timeKeeper != nullptr) {
                                     TimeoutCondition timeoutCondition;
                                     timeoutCondition.type = ActionType::LogIn;
@@ -547,6 +586,7 @@ namespace Twitch {
                                         loggedIn = true;
                                         user->LogIn();
                                     }
+                                    state = State::LoggedIn;
                                 } else if (message.command == "PING") {
                                     if (message.parameters.size() < 1) {
                                         continue;
@@ -599,6 +639,30 @@ namespace Twitch {
                                     messageInfo.channel = message.parameters[0].substr(1);
                                     messageInfo.message = message.parameters[1];
                                     user->Message(std::move(messageInfo));
+                                } else if (message.command == "CAP") {
+                                    if (state != State::AwaitingCaps) {
+                                        continue;
+                                    }
+                                    if (
+                                        (message.parameters.size() < 2)
+                                        || (message.parameters[1] != "LS")
+                                    ) {
+                                        continue;
+                                    }
+                                    // TODO: We probably want to parse the
+                                    // available caps and request them.
+                                    // For now, just end without requesting
+                                    // any.
+                                    SendLineToTwitchServer(*connection, "CAP END");
+                                    SendLineToTwitchServer(*connection, "PASS oauth:" + token);
+                                    SendLineToTwitchServer(*connection, "NICK " + nickname);
+                                    state = State::AwaitingMotd;
+                                    if (timeKeeper != nullptr) {
+                                        TimeoutCondition timeoutCondition;
+                                        timeoutCondition.type = ActionType::AwaitMotd;
+                                        timeoutCondition.expiration = timeKeeper->GetCurrentTime() + LOG_IN_TIMEOUT_SECONDS;
+                                        timeoutConditions.push(timeoutCondition);
+                                    }
                                 }
                             }
                         } break;

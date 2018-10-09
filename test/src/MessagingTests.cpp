@@ -42,6 +42,10 @@ namespace {
         bool isConnected = false;
         bool isDisconnected = false;
         bool connectionProblem = false;
+        bool capLsReceived = false;
+        bool capEndReceived = false;
+        bool nickSetBeforeCapEnd = false;
+        std::string capLsArg;
         std::string dataReceived;
         std::string nicknameOffered;
         std::string passwordOffered;
@@ -55,6 +59,24 @@ namespace {
                 lock,
                 std::chrono::milliseconds(100),
                 [this]{ return !nicknameOffered.empty(); }
+            );
+        }
+
+        bool AwaitCapLs() {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this]{ return capLsReceived; }
+            );
+        }
+
+        bool AwaitCapEnd() {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this]{ return capEndReceived; }
             );
         }
 
@@ -157,8 +179,16 @@ namespace {
                 passwordOffered = line.substr(5);
                 passwordOffered = SystemAbstractions::Trim(passwordOffered);
             } else if (line.substr(0, 5) == "NICK ") {
+                if (!capEndReceived) {
+                    nickSetBeforeCapEnd = true;
+                }
                 nicknameOffered = line.substr(5);
                 nicknameOffered = SystemAbstractions::Trim(nicknameOffered);
+            } else if (line.substr(0, 7) == "CAP LS ") {
+                capLsReceived = true;
+                capLsArg = line.substr(7);
+            } else if (line == "CAP END") {
+                capEndReceived = true;
             }
             wakeCondition.notify_one();
         }
@@ -441,6 +471,10 @@ TEST_F(MessagingTests, DiagnosticsSubscription) {
     const std::string nickname = "foobar1124";
     const std::string token = "alskdfjasdf87sdfsdffsd";
     tmi.LogIn(nickname, token);
+    (void)mockServer->AwaitCapLs();
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv CAP * LS :twitch.tv/membership twitch.tv/tags twitch.tv/commands" + CRLF
+    );
     (void)mockServer->AwaitNickname();
     (void)user->AwaitLogIn();
     mockServer->ReturnToClient(
@@ -450,6 +484,9 @@ TEST_F(MessagingTests, DiagnosticsSubscription) {
     (void)user->AwaitLogIn();
     EXPECT_EQ(
         (std::vector< std::string >{
+            "TMI[0]: < CAP LS 302",
+            "TMI[0]: > :tmi.twitch.tv CAP * LS :twitch.tv/membership twitch.tv/tags twitch.tv/commands",
+            "TMI[0]: < CAP END",
             "TMI[0]: < PASS oauth:**********************",
             "TMI[0]: < NICK foobar1124",
             "TMI[0]: > :tmi.twitch.tv 372 <user> :You are in a maze of twisty passages.",
@@ -499,7 +536,15 @@ TEST_F(MessagingTests, LogIntoChat) {
     const std::string nickname = "foobar1124";
     const std::string token = "alskdfjasdf87sdfsdffsd";
     tmi.LogIn(nickname, token);
+    EXPECT_TRUE(mockServer->AwaitCapLs());
+    EXPECT_EQ("302", mockServer->capLsArg);
+    EXPECT_FALSE(mockServer->AwaitCapEnd());
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv CAP * LS :twitch.tv/membership twitch.tv/tags twitch.tv/commands" + CRLF
+    );
+    EXPECT_TRUE(mockServer->AwaitCapEnd());
     EXPECT_TRUE(mockServer->AwaitNickname());
+    EXPECT_FALSE(mockServer->nickSetBeforeCapEnd);
     EXPECT_FALSE(user->AwaitLogIn());
     mockServer->ReturnToClient(
         ":tmi.twitch.tv 372 <user> :You are in a maze of twisty passages." + CRLF
@@ -512,6 +557,8 @@ TEST_F(MessagingTests, LogIntoChat) {
     EXPECT_EQ(std::string("oauth:") + token, mockServer->GetPasswordOffered());
     EXPECT_EQ(
         (std::vector< std::string >{
+            "CAP LS 302",
+            "CAP END",
             "PASS oauth:" + token,
             "NICK " + nickname,
         }),
@@ -574,10 +621,33 @@ TEST_F(MessagingTests, ExtraMotdWhileAlreadyLoggedIn) {
     EXPECT_FALSE(user->AwaitLogIn());
 }
 
+TEST_F(MessagingTests, LogInFailureNoCaps) {
+    const std::string nickname = "foobar1124";
+    const std::string token = "alskdfjasdf87sdfsdffsd";
+    tmi.LogIn(nickname, token);
+    (void)mockServer->AwaitNickname();
+    mockServer->ClearLinesReceived();
+    ASSERT_FALSE(user->AwaitLogOut());
+    mockTimeKeeper->currentTime = 5.0;
+    EXPECT_TRUE(user->AwaitLogOut());
+    EXPECT_FALSE(user->loggedIn);
+    EXPECT_EQ(
+        (std::vector< std::string >{
+            "QUIT :Timeout waiting for capability list"
+        }),
+        mockServer->GetLinesReceived()
+    );
+    EXPECT_TRUE(mockServer->IsDisconnected());
+}
+
 TEST_F(MessagingTests, LogInFailureNoMotd) {
     const std::string nickname = "foobar1124";
     const std::string token = "alskdfjasdf87sdfsdffsd";
     tmi.LogIn(nickname, token);
+    (void)mockServer->AwaitCapLs();
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv CAP * LS :twitch.tv/membership twitch.tv/tags twitch.tv/commands" + CRLF
+    );
     (void)mockServer->AwaitNickname();
     mockServer->ClearLinesReceived();
     ASSERT_FALSE(user->AwaitLogOut());
@@ -593,10 +663,39 @@ TEST_F(MessagingTests, LogInFailureNoMotd) {
     EXPECT_TRUE(mockServer->IsDisconnected());
 }
 
+TEST_F(MessagingTests, LogInSuccessShouldNotPreceedADisconnectAfter5Seconds) {
+    const std::string nickname = "foobar1124";
+    const std::string token = "alskdfjasdf87sdfsdffsd";
+    tmi.LogIn(nickname, token);
+    (void)mockServer->AwaitCapLs();
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv CAP * LS :twitch.tv/membership twitch.tv/tags twitch.tv/commands" + CRLF
+    );
+    (void)mockServer->AwaitNickname();
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv 372 <user> :You are in a maze of twisty passages." + CRLF
+        + ":tmi.twitch.tv 376 <user> :>" + CRLF
+    );
+    (void)user->AwaitLogIn();
+    mockServer->ClearLinesReceived();
+    mockTimeKeeper->currentTime = 5.0;
+    EXPECT_FALSE(user->AwaitLogOut());
+    EXPECT_EQ(
+        (std::vector< std::string >{
+        }),
+        mockServer->GetLinesReceived()
+    );
+    EXPECT_FALSE(mockServer->IsDisconnected());
+}
+
 TEST_F(MessagingTests, LogInFailureUnexpectedDisconnect) {
     const std::string nickname = "foobar1124";
     const std::string token = "alskdfjasdf87sdfsdffsd";
     tmi.LogIn(nickname, token);
+    (void)mockServer->AwaitCapLs();
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv CAP * LS :twitch.tv/membership twitch.tv/tags twitch.tv/commands" + CRLF
+    );
     EXPECT_TRUE(mockServer->AwaitNickname());
     EXPECT_FALSE(user->AwaitLogIn());
     mockServer->ClearLinesReceived();
