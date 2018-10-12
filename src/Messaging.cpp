@@ -169,6 +169,135 @@ namespace {
         std::vector< std::string > parameters;
     };
 
+    /**
+     * This method extracts the next message received from the
+     * Twitch server.
+     *
+     * @param[in,out] dataReceived
+     *     This is essentially just a buffer to receive raw characters
+     *     from the Twitch server, until a complete line has been
+     *     received, removed from this buffer, and handled appropriately.
+     *
+     * @param[out] message
+     *     This is where to store the next message received from the
+     *     Twitch server.
+     *
+     * @param[in] diagnosticsSender
+     *     This is used to publish any diagnostic messages generated
+     *     by this function.
+     *
+     * @return
+     *     An indication of whether or not a complete line was
+     *     extracted is returned.
+     */
+    bool GetNextMessage(
+        std::string& dataReceived,
+        Message& message,
+        SystemAbstractions::DiagnosticsSender& diagnosticsSender
+    ) {
+        // This tracks the current state of the state machine used
+        // in this function to parse the raw text of the message.
+        enum class State {
+            LineFirstCharacter,
+            Prefix,
+            CommandFirstCharacter,
+            CommandNotFirstCharacter,
+            ParameterFirstCharacter,
+            ParameterNotFirstCharacter,
+            Trailer,
+        } state = State::LineFirstCharacter;
+
+        // Extract the next line.
+        const auto lineEnd = dataReceived.find(CRLF);
+        if (lineEnd == std::string::npos) {
+            return false;
+        }
+        const auto line = dataReceived.substr(0, lineEnd);
+        diagnosticsSender.SendDiagnosticInformationString(0, "> " + line);
+
+        // Remove the line from the buffer.
+        dataReceived = dataReceived.substr(lineEnd + CRLF.length());
+
+        // Unpack the message from the line.
+        size_t offset = 0;
+        message = Message();
+        while (offset < line.length()) {
+            switch (state) {
+                // First character of the line.  It could be ':',
+                // which signals a prefix, or it's the first character
+                // of the command.
+                case State::LineFirstCharacter: {
+                    if (line[offset] == ':') {
+                        state = State::Prefix;
+                    } else {
+                        state = State::CommandNotFirstCharacter;
+                        message.command += line[offset];
+                    }
+                } break;
+
+                // Prefix
+                case State::Prefix: {
+                    if (line[offset] == ' ') {
+                        state = State::CommandFirstCharacter;
+                    } else {
+                        message.prefix += line[offset];
+                    }
+                } break;
+
+                // First character of command
+                case State::CommandFirstCharacter: {
+                    if (line[offset] != ' ') {
+                        state = State::CommandNotFirstCharacter;
+                        message.command += line[offset];
+                    }
+                } break;
+
+                // Command
+                case State::CommandNotFirstCharacter: {
+                    if (line[offset] == ' ') {
+                        state = State::ParameterFirstCharacter;
+                    } else {
+                        message.command += line[offset];
+                    }
+                } break;
+
+                // First character of parameter
+                case State::ParameterFirstCharacter: {
+                    if (line[offset] == ':') {
+                        state = State::Trailer;
+                        message.parameters.push_back("");
+                    } else if (line[offset] != ' ') {
+                        state = State::ParameterNotFirstCharacter;
+                        message.parameters.push_back(line.substr(offset, 1));
+                    }
+                } break;
+
+                // Parameter (not last, or last having no spaces)
+                case State::ParameterNotFirstCharacter: {
+                    if (line[offset] == ' ') {
+                        state = State::ParameterFirstCharacter;
+                    } else {
+                        message.parameters.back() += line[offset];
+                    }
+                } break;
+
+                // Last Parameter (may include spaces)
+                case State::Trailer: {
+                    message.parameters.back() += line[offset];
+                } break;
+            }
+            ++offset;
+        }
+        if (
+            (state == State::LineFirstCharacter)
+            || (state == State::Prefix)
+            || (state == State::CommandFirstCharacter)
+        ) {
+            message.command.clear();
+        }
+        return true;
+    }
+
 }
 
 namespace Twitch {
@@ -337,130 +466,6 @@ namespace Twitch {
         Impl()
             : diagnosticsSender("TMI")
         {
-        }
-
-        /**
-         * This method extracts the next message received from the
-         * Twitch server.
-         *
-         * @param[in,out] dataReceived
-         *      This is essentially just a buffer to receive raw characters
-         *      from the Twitch server, until a complete line has been
-         *      received, removed from this buffer, and handled appropriately.
-         *
-         * @param[out] message
-         *     This is where to store the next message received from the
-         *     Twitch server.
-         *
-         * @return
-         *     An indication of whether or not a complete line was
-         *     extracted is returned.
-         */
-        bool GetNextMessage(
-            std::string& dataReceived,
-            Message& message
-        ) {
-            // This tracks the current state of the state machine used
-            // in this function to parse the raw text of the message.
-            enum class State {
-                LineFirstCharacter,
-                Prefix,
-                CommandFirstCharacter,
-                CommandNotFirstCharacter,
-                ParameterFirstCharacter,
-                ParameterNotFirstCharacter,
-                Trailer,
-            } state = State::LineFirstCharacter;
-
-            // Extract the next line.
-            const auto lineEnd = dataReceived.find(CRLF);
-            if (lineEnd == std::string::npos) {
-                return false;
-            }
-            const auto line = dataReceived.substr(0, lineEnd);
-            diagnosticsSender.SendDiagnosticInformationString(0, "> " + line);
-
-            // Remove the line from the buffer.
-            dataReceived = dataReceived.substr(lineEnd + CRLF.length());
-
-            // Unpack the message from the line.
-            size_t offset = 0;
-            message = Message();
-            while (offset < line.length()) {
-                switch (state) {
-                    // First character of the line.  It could be ':',
-                    // which signals a prefix, or it's the first character
-                    // of the command.
-                    case State::LineFirstCharacter: {
-                        if (line[offset] == ':') {
-                            state = State::Prefix;
-                        } else {
-                            state = State::CommandNotFirstCharacter;
-                            message.command += line[offset];
-                        }
-                    } break;
-
-                    // Prefix
-                    case State::Prefix: {
-                        if (line[offset] == ' ') {
-                            state = State::CommandFirstCharacter;
-                        } else {
-                            message.prefix += line[offset];
-                        }
-                    } break;
-
-                    // First character of command
-                    case State::CommandFirstCharacter: {
-                        if (line[offset] != ' ') {
-                            state = State::CommandNotFirstCharacter;
-                            message.command += line[offset];
-                        }
-                    } break;
-
-                    // Command
-                    case State::CommandNotFirstCharacter: {
-                        if (line[offset] == ' ') {
-                            state = State::ParameterFirstCharacter;
-                        } else {
-                            message.command += line[offset];
-                        }
-                    } break;
-
-                    // First character of parameter
-                    case State::ParameterFirstCharacter: {
-                        if (line[offset] == ':') {
-                            state = State::Trailer;
-                            message.parameters.push_back("");
-                        } else if (line[offset] != ' ') {
-                            state = State::ParameterNotFirstCharacter;
-                            message.parameters.push_back(line.substr(offset, 1));
-                        }
-                    } break;
-
-                    // Parameter (not last, or last having no spaces)
-                    case State::ParameterNotFirstCharacter: {
-                        if (line[offset] == ' ') {
-                            state = State::ParameterFirstCharacter;
-                        } else {
-                            message.parameters.back() += line[offset];
-                        }
-                    } break;
-
-                    // Last Parameter (may include spaces)
-                    case State::Trailer: {
-                        message.parameters.back() += line[offset];
-                    } break;
-                }
-                ++offset;
-            }
-            if (
-                (state == State::LineFirstCharacter)
-                || (state == State::Prefix)
-                || (state == State::CommandFirstCharacter)
-            ) {
-                message.command.clear();
-            }
-            return true;
         }
 
         /**
@@ -899,7 +904,7 @@ namespace Twitch {
             };
             dataReceived += action.message;
             Message message;
-            while (GetNextMessage(dataReceived, message)) {
+            while (GetNextMessage(dataReceived, message, diagnosticsSender)) {
                 const auto commandHandler = serverCommandHandlers.find(message.command);
                 if (commandHandler != serverCommandHandlers.end()) {
                     (this->*(commandHandler->second))(std::move(message));
