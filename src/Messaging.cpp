@@ -12,7 +12,9 @@
 #include <condition_variable>
 #include <deque>
 #include <list>
+#include <map>
 #include <mutex>
+#include <set>
 #include <string>
 #include <SystemAbstractions/StringExtensions.hpp>
 #include <thread>
@@ -52,66 +54,70 @@ namespace {
     };
 
     /**
-     * These are the types of actions which the Messaging class worker can
-     * perform.
-     */
-    enum class ActionType {
-        /**
-         * Establish a new connection to Twitch chat, and use the new
-         * connection to log in.
-         */
-        LogIn,
-
-        /**
-         * Request the IRCv3 capabilities of the server.
-         */
-        RequestCaps,
-
-        /**
-         * Wait for the message of the day (MOTD) from the server.
-         */
-        AwaitMotd,
-
-        /**
-         * Log out of Twitch chat, and close the active connection.
-         */
-        LogOut,
-
-        /**
-         * Process all messages received from the Twitch server.
-         */
-        ProcessMessagesReceived,
-
-        /**
-         * Handle when the server closes its end of the connection.
-         */
-        ServerDisconnected,
-
-        /**
-         * Join a chat room.
-         */
-        Join,
-
-        /**
-         * Leave a chat room.
-         */
-        Leave,
-
-        /**
-         * Send a message to a channel.
-         */
-        SendMessage,
-    };
-
-    /**
      * This is used to convey an action for the Messaging class worker
-     * to perform, including any parameters.
+     * to either perform or await, including any necessary context.
      */
     struct Action {
+        // Types
+
+        /**
+         * These are the types of actions which the Messaging class worker can
+         * perform.
+         */
+        enum class Type {
+            /**
+             * Establish a new connection to Twitch chat, and use the new
+             * connection to log in.
+             */
+            LogIn,
+
+            /**
+             * Request the IRCv3 capabilities of the server.
+             */
+            RequestCaps,
+
+            /**
+             * Wait for the message of the day (MOTD) from the server.
+             */
+            AwaitMotd,
+
+            /**
+             * Log out of Twitch chat, and close the active connection.
+             */
+            LogOut,
+
+            /**
+             * Process all messages received from the Twitch server.
+             */
+            ProcessMessagesReceived,
+
+            /**
+             * Handle when the server closes its end of the connection.
+             */
+            ServerDisconnected,
+
+            /**
+             * Join a chat room.
+             */
+            Join,
+
+            /**
+             * Leave a chat room.
+             */
+            Leave,
+
+            /**
+             * Send a message to a channel.
+             */
+            SendMessage,
+        };
+
+        // Properties
+
         /**
          * This is the type of action to perform.
          */
-        ActionType type;
+        Type type;
 
         /**
          * This is used with multiple actions, to provide the client
@@ -133,7 +139,7 @@ namespace {
 
         /**
          * This is the time, according to the time keeper, at which
-         * the action will be considered as having timed out.
+         * the action will be considered timed out.
          */
         double expiration = 0.0;
     };
@@ -171,7 +177,72 @@ namespace Twitch {
      * This contains the private properties of a Messaging instance.
      */
     struct Messaging::Impl {
+        // Types
+
+        /**
+         * This is the type of member function pointer used to map
+         * action types to their performer methods.
+         *
+         * @param[in] action
+         *     This is the action to perform.
+         */
+        typedef void(Impl::*ActionPerformer)(Action&& action);
+
+        /**
+         * This is the type of member function pointer used to map
+         * action types to their timeout methods.
+         *
+         * @param[in] action
+         *     This is the action to time out.
+         */
+        typedef void(Impl::*ActionTimeout)(Action&& action);
+
+        /**
+         * This is the type of member function pointer used to map
+         * server commands to their handlers.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        typedef void(Impl::*ServerCommandHandler)(Message&& message);
+
+        /**
+         * This is the type of member function pointer used to map
+         * action types to their message processors.
+         *
+         * @param[in,out] action
+         *     This is the action for which to process the given message.
+         *
+         * @param[in] message
+         *     This holds information about the message to process
+         *     within the context of the given action.
+         *
+         * @return
+         *     An indication of whether or not the action was completed by
+         *     processing the given message is returned.
+         */
+        typedef bool(Impl::*ActionProcessor)(
+            Action& action,
+            const Message& message
+        );
+
+        /**
+         * This is the type of map used to map action types to their message
+         * processors.
+         */
+        typedef std::map< Action::Type, ActionProcessor > ActionProcessors;
+
         // Properties
+
+        /**
+         * This is used to synchronize access to the object.
+         */
+        std::mutex mutex;
+
+        // --------------------------------------------------------------------
+        // All properties in this section are protected by the mutex.
+        // ⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇
+        // --------------------------------------------------------------------
 
         /**
          * This is a helper object used to generate and publish
@@ -197,11 +268,6 @@ namespace Twitch {
         std::shared_ptr< User > user = std::make_shared< User >();
 
         /**
-         * This is used to synchronize access to the object.
-         */
-        std::mutex mutex;
-
-        /**
          * This is used to signal the worker thread to wake up.
          */
         std::condition_variable wakeWorker;
@@ -213,14 +279,55 @@ namespace Twitch {
         bool stopWorker = false;
 
         /**
+         * These are the actions to be performed by the worker thread.
+         */
+        std::deque< Action > actionsToBePerformed;
+
+        /**
          * This is used to perform background tasks for the object.
          */
         std::thread worker;
 
-        /**
-         * These are the actions to be performed by the worker thread.
-         */
-        std::deque< Action > actionsToBePerformed;
+        // --------------------------------------------------------------------
+        // ⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆
+        // All properties in this section are protected by the mutex.
+        // --------------------------------------------------------------------
+
+        // --------------------------------------------------------------------
+        // All properties in this section should only be used by the worker
+        // thread.
+        // ⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇
+        // --------------------------------------------------------------------
+
+        // This is the interface to the current connection to the Twitch
+        // server, if we are connected.
+        std::shared_ptr< Connection > connection;
+
+        // This is essentially just a buffer to receive raw characters from
+        // the Twitch server, until a complete line has been received,
+        // removed from this buffer, and handled appropriately.
+        std::string dataReceived;
+
+        // This flag indicates whether or not the client has finished
+        // logging into the Twitch server (we've received the Message Of
+        // The Day (MOTD) from the server).
+        bool loggedIn = false;
+
+        // This holds onto any actions for which the worker is awaiting a
+        // response from the server.
+        std::list< Action > actionsAwaitingResponses;
+
+        // This keeps track of the current state of the connection.
+        State state = State::NotLoggedIn;
+
+        // These are the IRCv3 capabilities advertised by the server.
+        std::set< std::string > capsSupported;
+
+        // --------------------------------------------------------------------
+        // ⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆
+        // All properties in this section should only be used by the worker
+        // thread.
+        // --------------------------------------------------------------------
 
         // Methods
 
@@ -388,10 +495,10 @@ namespace Twitch {
          * @param[in] rawText
          *     This is the raw text received from the Twitch server.
          */
-        void MessageReceived(const std::string& rawText) {
+        void OnMessageReceived(const std::string& rawText) {
             std::lock_guard< decltype(mutex) > lock(mutex);
             Action action;
-            action.type = ActionType::ProcessMessagesReceived;
+            action.type = Action::Type::ProcessMessagesReceived;
             action.message = rawText;
             actionsToBePerformed.push_back(action);
             wakeWorker.notify_one();
@@ -401,12 +508,66 @@ namespace Twitch {
          * This method is called when the Twitch server closes its end of the
          * connection.
          */
-        void ServerDisconnected() {
+        void OnServerDisconnected() {
             std::lock_guard< decltype(mutex) > lock(mutex);
             Action action;
-            action.type = ActionType::ServerDisconnected;
+            action.type = Action::Type::ServerDisconnected;
             actionsToBePerformed.push_back(action);
             wakeWorker.notify_one();
+        }
+
+        /**
+         * This method is called to request additional IRC capabilities for the
+         * connection with the Twitch chat server.
+         *
+         * @param[in] nickname
+         *     This is the nickname with which to log into Twitch chat.
+         *
+         * @param[in] token
+         *     This is the OAuth token to use to authenticate with Twitch chat.
+         */
+        void RequestCapabilities(
+            const std::string& nickname,
+            const std::string& token
+        ) {
+            SendLineToTwitchServer(*connection, "CAP REQ :twitch.tv/commands");
+            Action action;
+            action.type = Action::Type::RequestCaps;
+            action.nickname = nickname;
+            action.token = token;
+            if (timeKeeper != nullptr) {
+                action.expiration = timeKeeper->GetCurrentTime() + LOG_IN_TIMEOUT_SECONDS;
+            }
+            actionsAwaitingResponses.push_back(std::move(action));
+        }
+
+        /**
+         * This method is called to finish the capabilities negotiation phase
+         * of logging into Twitch chat, send the user's authentication
+         * information, and begin waiting for the Message of the Day (MOTD)
+         * from the server, to indicate that we're logged in successfully.
+         *
+         * @param[in] nickname
+         *     This is the nickname with which to log into Twitch chat.
+         *
+         * @param[in] token
+         *     This is the OAuth token to use to authenticate with Twitch chat.
+         */
+        void EndCapabilitiesHandshakeAndAuthenticate(
+            const std::string& nickname,
+            const std::string& token
+        ) {
+            SendLineToTwitchServer(*connection, "CAP END");
+            SendLineToTwitchServer(*connection, "PASS oauth:" + token);
+            SendLineToTwitchServer(*connection, "NICK " + nickname);
+            Action action;
+            action.type = Action::Type::AwaitMotd;
+            action.nickname = nickname;
+            action.token = token;
+            if (timeKeeper != nullptr) {
+                action.expiration = timeKeeper->GetCurrentTime() + LOG_IN_TIMEOUT_SECONDS;
+            }
+            actionsAwaitingResponses.push_back(std::move(action));
         }
 
         /**
@@ -433,6 +594,492 @@ namespace Twitch {
         }
 
         /**
+         * This method is called to process the given message through all
+         * actions awaiting responses, removing any actions that are completed
+         * after processing the message.
+         *
+         * @param[in] message
+         *     This is the message to process through all actions awaiting
+         *     responses.
+         *
+         * @param[in] actionProcessors
+         *     This is the map of action types to processing methods to use
+         *     for the given message.
+         */
+        void ProcessMessageWithAwaitingActions(
+            const Message& message,
+            const ActionProcessors& actionProcessors
+        ) {
+            for (
+                auto it = actionsAwaitingResponses.begin(),
+                end = actionsAwaitingResponses.end();
+                it != end;
+            ) {
+                auto& action = *it;
+                const auto actionProcessor = actionProcessors.find(action.type);
+                if (
+                    (actionProcessor != actionProcessors.end())
+                    && (this->*(actionProcessor->second))(action, message)
+                ) {
+                    it = actionsAwaitingResponses.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+        }
+
+        /**
+         * This method is called from the worker thread to time out any actions
+         * that are awaiting responses but have expired.
+         */
+        void ProcessTimeouts() {
+            const auto now = timeKeeper->GetCurrentTime();
+            for (
+                auto it = actionsAwaitingResponses.begin(),
+                end = actionsAwaitingResponses.end();
+                it != end;
+            ) {
+                auto& action = *it;
+                if (now >= action.expiration) {
+                    TimeoutAction(std::move(action));
+                    it = actionsAwaitingResponses.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+        }
+
+        /**
+         * This method posts the given action to the queue of actions to be
+         * performed by the worker thread, and wakes the worker thread up.
+         *
+         * @param[in] action
+         *     This is the action to perform.
+         */
+        void PostAction(Action&& action) {
+            std::lock_guard< decltype(mutex) > lock(mutex);
+            actionsToBePerformed.push_back(std::move(action));
+            wakeWorker.notify_one();
+        }
+
+        /**
+         * This method performs the given action.
+         *
+         * @param[in] action
+         *     This is the action to perform.
+         */
+        void PerformAction(Action&& action) {
+            static const std::map< Action::Type, ActionPerformer > actionPerformers = {
+                {Action::Type::LogIn, &Impl::PerformActionLogIn},
+                {Action::Type::LogOut, &Impl::PerformActionLogOut},
+                {Action::Type::ProcessMessagesReceived, &Impl::PerformActionProcessMessagesReceived},
+                {Action::Type::ServerDisconnected, &Impl::PerformActionServerDisconnected},
+                {Action::Type::Join, &Impl::PerformActionJoin},
+                {Action::Type::Leave, &Impl::PerformActionLeave},
+                {Action::Type::SendMessage, &Impl::PerformActionSendMessage},
+            };
+            const auto actionPerformer = actionPerformers.find(action.type);
+            if (actionPerformer != actionPerformers.end()) {
+                (this->*(actionPerformer->second))(std::move(action));
+            }
+        }
+
+        /**
+         * This method times out the given action.
+         *
+         * @param[in] action
+         *     This is the action to time out.
+         */
+        void TimeoutAction(Action&& action) {
+            static const std::map< Action::Type, ActionTimeout > actionTimeouts = {
+                {Action::Type::LogIn, &Impl::TimeoutActionLogIn},
+                {Action::Type::RequestCaps, &Impl::TimeoutActionRequestCaps},
+                {Action::Type::AwaitMotd, &Impl::TimeoutActionAwaitMotd},
+            };
+            const auto actionTimeout = actionTimeouts.find(action.type);
+            if (actionTimeout != actionTimeouts.end()) {
+                (this->*(actionTimeout->second))(std::move(action));
+            }
+        }
+
+        /**
+         * This method performs the given LogIn action.
+         *
+         * @param[in] action
+         *     This is the action to perform.
+         */
+        void PerformActionLogIn(Action&& action) {
+            if (connection != nullptr) {
+                return;
+            }
+            connection = connectionFactory();
+            connection->SetMessageReceivedDelegate(
+                std::bind(&Impl::OnMessageReceived, this, std::placeholders::_1)
+            );
+            connection->SetDisconnectedDelegate(
+                std::bind(&Impl::OnServerDisconnected, this)
+            );
+            if (connection->Connect()) {
+                capsSupported.clear();
+                SendLineToTwitchServer(*connection, "CAP LS 302");
+                if (timeKeeper != nullptr) {
+                    action.expiration = timeKeeper->GetCurrentTime() + LOG_IN_TIMEOUT_SECONDS;
+                }
+                actionsAwaitingResponses.push_back(std::move(action));
+            } else {
+                user->LogOut();
+            }
+        }
+
+        /**
+         * This method processes the given CAP message in context of the given
+         * LogIn action.
+         *
+         * @param[in,out] action
+         *     This is the action for which to process the given message.
+         *
+         * @param[in] message
+         *     This holds information about the message to process
+         *     within the context of the given action.
+         *
+         * @return
+         *     An indication of whether or not the action was completed by
+         *     processing the given message is returned.
+         */
+        bool ProcessActionLogInCap(
+            Action& action,
+            const Message& message
+        ) {
+            if (
+                (message.parameters.size() < 3)
+                || (message.parameters[1] != "LS")
+            ) {
+                return false;
+            }
+            if (message.parameters[2] == "*") {
+                const auto newCapsSupported = SystemAbstractions::Split(message.parameters[3], ' ');
+                capsSupported.insert(newCapsSupported.begin(), newCapsSupported.end());
+                return false;
+            } else {
+                const auto newCapsSupported = SystemAbstractions::Split(message.parameters[2], ' ');
+                capsSupported.insert(newCapsSupported.begin(), newCapsSupported.end());
+                if (capsSupported.find("twitch.tv/commands") == capsSupported.end()) {
+                    EndCapabilitiesHandshakeAndAuthenticate(
+                        action.nickname,
+                        action.token
+                    );
+                } else {
+                    RequestCapabilities(
+                        action.nickname,
+                        action.token
+                    );
+                }
+                return true;
+            }
+        }
+
+        /**
+         * This method times out the given LogIn action.
+         *
+         * @param[in] action
+         *     This is the action to time out.
+         */
+        void TimeoutActionLogIn(Action&& action) {
+            Disconnect(*connection, "Timeout waiting for capability list");
+        }
+
+        /**
+         * This method processes the given CAP message in context of the given
+         * RequestCaps action.
+         *
+         * @param[in,out] action
+         *     This is the action for which to process the given message.
+         *
+         * @param[in] message
+         *     This holds information about the message to process
+         *     within the context of the given action.
+         *
+         * @return
+         *     An indication of whether or not the action was completed by
+         *     processing the given message is returned.
+         */
+        bool ProcessActionRequestCapsCap(
+            Action& action,
+            const Message& message
+        ) {
+            if (
+                (message.parameters.size() < 2)
+                || (
+                    (message.parameters[1] != "ACK")
+                    && (message.parameters[1] != "NAK")
+                )
+            ) {
+                return false;
+            }
+            EndCapabilitiesHandshakeAndAuthenticate(
+                action.nickname,
+                action.token
+            );
+            return true;
+        }
+
+        /**
+         * This method times out the given RequestCaps action.
+         *
+         * @param[in] action
+         *     This is the action to time out.
+         */
+        void TimeoutActionRequestCaps(Action&& action) {
+            Disconnect(*connection, "Timeout waiting for response to capability request");
+        }
+
+        /**
+         * This method processes the given Message of the Day (MOTD) message in
+         * context of the given AwaitMotd action.
+         *
+         * @param[in,out] action
+         *     This is the action for which to process the given message.
+         *
+         * @param[in] message
+         *     This holds information about the message to process
+         *     within the context of the given action.
+         *
+         * @return
+         *     An indication of whether or not the action was completed by
+         *     processing the given message is returned.
+         */
+        bool ProcessActionAwaitMotdMotd(
+            Action& action,
+            const Message& message
+        ) {
+            if (!loggedIn) {
+                loggedIn = true;
+                user->LogIn();
+            }
+            state = State::LoggedIn;
+            return true;
+        }
+
+        /**
+         * This method times out the given AwaitMotd action.
+         *
+         * @param[in] action
+         *     This is the action to time out.
+         */
+        void TimeoutActionAwaitMotd(Action&& action) {
+            Disconnect(*connection, "Timeout waiting for MOTD");
+        }
+
+        /**
+         * This method performs the given LogOut action.
+         *
+         * @param[in] action
+         *     This is the action to perform.
+         */
+        void PerformActionLogOut(Action&& action) {
+            if (connection != nullptr) {
+                Disconnect(*connection, action.message);
+            }
+        }
+
+        /**
+         * This method performs the given ProcessMessagesReceived action.
+         *
+         * @param[in] action
+         *     This is the action to perform.
+         */
+        void PerformActionProcessMessagesReceived(Action&& action) {
+            static const std::map< std::string, ServerCommandHandler > serverCommandHandlers = {
+                {"376", &Impl::HandleServerCommandMotd},
+                {"PING", &Impl::HandleServerCommandPing},
+                {"JOIN", &Impl::HandleServerCommandJoin},
+                {"PART", &Impl::HandleServerCommandPart},
+                {"PRIVMSG", &Impl::HandleServerCommandPrivMsg},
+                {"CAP", &Impl::HandleServerCommandCap},
+            };
+            dataReceived += action.message;
+            Message message;
+            while (GetNextMessage(dataReceived, message)) {
+                const auto commandHandler = serverCommandHandlers.find(message.command);
+                if (commandHandler != serverCommandHandlers.end()) {
+                    (this->*(commandHandler->second))(std::move(message));
+                }
+            }
+        }
+
+        /**
+         * This method is called to handle the end-of-MOTD command (376) from
+         * the Twitch server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandMotd(Message&& message) {
+            static const ActionProcessors motdActionProcessors = {
+                {Action::Type::AwaitMotd, &Impl::ProcessActionAwaitMotdMotd},
+            };
+            ProcessMessageWithAwaitingActions(
+                message,
+                motdActionProcessors
+            );
+        }
+
+        /**
+         * This method is called to handle the PING command from the Twitch
+         * server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandPing(Message&& message) {
+            if (message.parameters.size() < 1) {
+                return;
+            }
+            const auto server = message.parameters[0];
+            if (connection != nullptr) {
+                SendLineToTwitchServer(*connection, "PONG :" + server);
+            }
+        }
+
+        /**
+         * This method is called to handle the JOIN command from the Twitch
+         * server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandJoin(Message&& message) {
+            if (
+                (message.parameters.size() < 1)
+                && (message.parameters[0].length() < 2)
+            ) {
+                return;
+            }
+            const auto nicknameDelimiter = message.prefix.find('!');
+            if (nicknameDelimiter == std::string::npos) {
+                return;
+            }
+            const auto nickname = message.prefix.substr(0, nicknameDelimiter);
+            const auto channel = message.parameters[0].substr(1);
+            user->Join(channel, nickname);
+        }
+
+        /**
+         * This method is called to handle the PART command from the Twitch
+         * server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandPart(Message&& message) {
+            if (
+                (message.parameters.size() < 1)
+                && (message.parameters[0].length() < 2)
+            ) {
+                return;
+            }
+            const auto nicknameDelimiter = message.prefix.find('!');
+            if (nicknameDelimiter == std::string::npos) {
+                return;
+            }
+            const auto nickname = message.prefix.substr(0, nicknameDelimiter);
+            const auto channel = message.parameters[0].substr(1);
+            user->Leave(channel, nickname);
+        }
+
+        /**
+         * This method is called to handle the PRIVMSG command from the Twitch
+         * server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandPrivMsg(Message&& message) {
+            if (
+                (message.parameters.size() < 2)
+                && (message.parameters[0].length() < 2)
+            ) {
+                return;
+            }
+            const auto nicknameDelimiter = message.prefix.find('!');
+            if (nicknameDelimiter == std::string::npos) {
+                return;
+            }
+            MessageInfo messageInfo;
+            messageInfo.user = message.prefix.substr(0, nicknameDelimiter);
+            messageInfo.channel = message.parameters[0].substr(1);
+            messageInfo.message = message.parameters[1];
+            user->Message(std::move(messageInfo));
+        }
+
+        /**
+         * This method is called to handle the CAP command from the Twitch
+         * server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandCap(Message&& message) {
+            static const ActionProcessors capActionProcessors = {
+                {Action::Type::LogIn, &Impl::ProcessActionLogInCap},
+                {Action::Type::RequestCaps, &Impl::ProcessActionRequestCapsCap},
+            };
+            ProcessMessageWithAwaitingActions(
+                message,
+                capActionProcessors
+            );
+        }
+
+        /**
+         * This method performs the given ServerDisconnected action.
+         *
+         * @param[in] action
+         *     This is the action to perform.
+         */
+        void PerformActionServerDisconnected(Action&& action) {
+            Disconnect(*connection);
+        }
+
+        /**
+         * This method performs the given Join action.
+         *
+         * @param[in] action
+         *     This is the action to perform.
+         */
+        void PerformActionJoin(Action&& action) {
+            if (connection == nullptr) {
+                return;
+            }
+            SendLineToTwitchServer(*connection, "JOIN #" + action.nickname);
+        }
+
+        /**
+         * This method performs the given Leave action.
+         *
+         * @param[in] action
+         *     This is the action to perform.
+         */
+        void PerformActionLeave(Action&& action) {
+            if (connection == nullptr) {
+                return;
+            }
+            SendLineToTwitchServer(*connection, "PART #" + action.nickname);
+        }
+
+        /**
+         * This method performs the given SendMessage action.
+         *
+         * @param[in] action
+         *     This is the action to perform.
+         */
+        void PerformActionSendMessage(Action&& action) {
+            if (connection == nullptr) {
+                return;
+            }
+            SendLineToTwitchServer(*connection, "PRIVMSG #" + action.nickname + " :" + action.message);
+        }
+
+        /**
          * This method signals the worker thread to stop.
          */
         void StopWorker() {
@@ -446,307 +1093,18 @@ namespace Twitch {
          * for the object.
          */
         void Worker() {
-            // This is the interface to the current connection to the Twitch
-            // server, if we are connected.
-            std::shared_ptr< Connection > connection;
-
-            // This is essentially just a buffer to receive raw characters from
-            // the Twitch server, until a complete line has been received,
-            // removed from this buffer, and handled appropriately.
-            std::string dataReceived;
-
-            // This flag indicates whether or not the client has finished
-            // logging into the Twitch server (we've received the Message Of
-            // The Day (MOTD) from the server).
-            bool loggedIn = false;
-
-            // This holds onto any actions for which the worker is awaiting a
-            // response from the server.
-            std::list< Action > actionsAwaitingResponses;
-
-            // This keeps track of the current state of the connection.
-            State state = State::NotLoggedIn;
-
-            // This is the nickname to use when logging in.
-            std::string nickname;
-
-            // This is the OAuth token to be used to authenticate
-            // with the server.
-            std::string token;
-
-            // These are the IRCv3 capabilities advertised by the server.
-            std::string capsSupported;
-
             std::unique_lock< decltype(mutex) > lock(mutex);
             while (!stopWorker) {
                 lock.unlock();
                 if (timeKeeper != nullptr) {
-                    const auto now = timeKeeper->GetCurrentTime();
-                    for (
-                        auto it = actionsAwaitingResponses.begin(),
-                        end = actionsAwaitingResponses.end();
-                        it != end;
-                    ) {
-                        const auto& action = *it;
-                        if (now >= action.expiration) {
-                            switch (action.type) {
-                                case ActionType::LogIn: {
-                                    Disconnect(*connection, "Timeout waiting for capability list");
-                                } break;
-
-                                case ActionType::RequestCaps: {
-                                    Disconnect(*connection, "Timeout waiting for response to capability request");
-                                } break;
-
-                                case ActionType::AwaitMotd: {
-                                    Disconnect(*connection, "Timeout waiting for MOTD");
-                                } break;
-
-                                default: {
-                                } break;
-                            }
-                            it = actionsAwaitingResponses.erase(it);
-                        } else {
-                            ++it;
-                        }
-                    }
+                    ProcessTimeouts();
                 }
                 lock.lock();
                 while (!actionsToBePerformed.empty()) {
                     auto action = actionsToBePerformed.front();
                     actionsToBePerformed.pop_front();
                     lock.unlock();
-                    switch (action.type) {
-                        case ActionType::LogIn: {
-                            if (connection != nullptr) {
-                                break;
-                            }
-                            connection = connectionFactory();
-                            connection->SetMessageReceivedDelegate(
-                                std::bind(&Impl::MessageReceived, this, std::placeholders::_1)
-                            );
-                            connection->SetDisconnectedDelegate(
-                                std::bind(&Impl::ServerDisconnected, this)
-                            );
-                            if (connection->Connect()) {
-                                capsSupported.clear();
-                                SendLineToTwitchServer(*connection, "CAP LS 302");
-                                nickname = action.nickname;
-                                token = action.token;
-                                if (timeKeeper != nullptr) {
-                                    action.expiration = timeKeeper->GetCurrentTime() + LOG_IN_TIMEOUT_SECONDS;
-                                }
-                                actionsAwaitingResponses.push_back(std::move(action));
-                            } else {
-                                user->LogOut();
-                            }
-                        } break;
-
-                        case ActionType::LogOut: {
-                            if (connection != nullptr) {
-                                Disconnect(*connection, action.message);
-                            }
-                        } break;
-
-                        case ActionType::ProcessMessagesReceived: {
-                            dataReceived += action.message;
-                            Message message;
-                            while (GetNextMessage(dataReceived, message)) {
-                                if (message.command.empty()) {
-                                    continue;
-                                }
-                                if (message.command == "376") { // RPL_ENDOFMOTD (RFC 1459)
-                                    for (
-                                        auto it = actionsAwaitingResponses.begin(),
-                                        end = actionsAwaitingResponses.end();
-                                        it != end;
-                                    ) {
-                                        auto action = *it;
-                                        bool handled = false;
-                                        switch (action.type) {
-                                            case ActionType::AwaitMotd: {
-                                                handled = true;
-                                                if (!loggedIn) {
-                                                    loggedIn = true;
-                                                    user->LogIn();
-                                                }
-                                                state = State::LoggedIn;
-                                            } break;
-
-                                            default: {
-                                            } break;
-                                        }
-                                        if (handled) {
-                                            it = actionsAwaitingResponses.erase(it);
-                                        } else {
-                                            ++it;
-                                        }
-                                    }
-                                } else if (message.command == "PING") {
-                                    if (message.parameters.size() < 1) {
-                                        continue;
-                                    }
-                                    const auto server = message.parameters[0];
-                                    if (connection != nullptr) {
-                                        SendLineToTwitchServer(*connection, "PONG :" + server);
-                                    }
-                                } else if (message.command == "JOIN") {
-                                    if (
-                                        (message.parameters.size() < 1)
-                                        && (message.parameters[0].length() < 2)
-                                    ) {
-                                        continue;
-                                    }
-                                    const auto nicknameDelimiter = message.prefix.find('!');
-                                    if (nicknameDelimiter == std::string::npos) {
-                                        continue;
-                                    }
-                                    const auto nickname = message.prefix.substr(0, nicknameDelimiter);
-                                    const auto channel = message.parameters[0].substr(1);
-                                    user->Join(channel, nickname);
-                                } else if (message.command == "PART") {
-                                    if (
-                                        (message.parameters.size() < 1)
-                                        && (message.parameters[0].length() < 2)
-                                    ) {
-                                        continue;
-                                    }
-                                    const auto nicknameDelimiter = message.prefix.find('!');
-                                    if (nicknameDelimiter == std::string::npos) {
-                                        continue;
-                                    }
-                                    const auto nickname = message.prefix.substr(0, nicknameDelimiter);
-                                    const auto channel = message.parameters[0].substr(1);
-                                    user->Leave(channel, nickname);
-                                } else if (message.command == "PRIVMSG") {
-                                    if (
-                                        (message.parameters.size() < 2)
-                                        && (message.parameters[0].length() < 2)
-                                    ) {
-                                        continue;
-                                    }
-                                    const auto nicknameDelimiter = message.prefix.find('!');
-                                    if (nicknameDelimiter == std::string::npos) {
-                                        continue;
-                                    }
-                                    MessageInfo messageInfo;
-                                    messageInfo.user = message.prefix.substr(0, nicknameDelimiter);
-                                    messageInfo.channel = message.parameters[0].substr(1);
-                                    messageInfo.message = message.parameters[1];
-                                    user->Message(std::move(messageInfo));
-                                } else if (message.command == "CAP") {
-                                    for (
-                                        auto it = actionsAwaitingResponses.begin(),
-                                        end = actionsAwaitingResponses.end();
-                                        it != end;
-                                    ) {
-                                        auto action = *it;
-                                        bool handled = false;
-                                        switch (action.type) {
-                                            case ActionType::LogIn: {
-                                                if (
-                                                    (message.parameters.size() < 3)
-                                                    || (message.parameters[1] != "LS")
-                                                ) {
-                                                    break;
-                                                }
-                                                if (!capsSupported.empty()) {
-                                                    capsSupported += " ";
-                                                }
-                                                if (message.parameters[2] == "*") {
-                                                    capsSupported += message.parameters[3];
-                                                } else {
-                                                    handled = true;
-                                                    capsSupported += message.parameters[2];
-                                                    const auto capsSupportedVector = SystemAbstractions::Split(capsSupported, ' ');
-                                                    if (
-                                                        std::find(
-                                                            capsSupportedVector.begin(),
-                                                            capsSupportedVector.end(),
-                                                            "twitch.tv/commands"
-                                                        ) == capsSupportedVector.end()
-                                                    ) {
-                                                        SendLineToTwitchServer(*connection, "CAP END");
-                                                        SendLineToTwitchServer(*connection, "PASS oauth:" + token);
-                                                        SendLineToTwitchServer(*connection, "NICK " + nickname);
-                                                        action.type = ActionType::AwaitMotd;
-                                                        if (timeKeeper != nullptr) {
-                                                            action.expiration = timeKeeper->GetCurrentTime() + LOG_IN_TIMEOUT_SECONDS;
-                                                        }
-                                                        actionsAwaitingResponses.push_back(std::move(action));
-                                                    } else {
-                                                        SendLineToTwitchServer(*connection, "CAP REQ :twitch.tv/commands");
-                                                        action.type = ActionType::RequestCaps;
-                                                        if (timeKeeper != nullptr) {
-                                                            action.expiration = timeKeeper->GetCurrentTime() + LOG_IN_TIMEOUT_SECONDS;
-                                                        }
-                                                        actionsAwaitingResponses.push_back(std::move(action));
-                                                    }
-                                                }
-                                            } break;
-
-                                            case ActionType::RequestCaps: {
-                                                if (
-                                                    (message.parameters.size() < 2)
-                                                    || (
-                                                        (message.parameters[1] != "ACK")
-                                                        && (message.parameters[1] != "NAK")
-                                                    )
-                                                ) {
-                                                    break;
-                                                }
-                                                handled = true;
-                                                SendLineToTwitchServer(*connection, "CAP END");
-                                                SendLineToTwitchServer(*connection, "PASS oauth:" + token);
-                                                SendLineToTwitchServer(*connection, "NICK " + nickname);
-                                                action.type = ActionType::AwaitMotd;
-                                                if (timeKeeper != nullptr) {
-                                                    action.expiration = timeKeeper->GetCurrentTime() + LOG_IN_TIMEOUT_SECONDS;
-                                                }
-                                                actionsAwaitingResponses.push_back(std::move(action));
-                                            } break;
-
-                                            default: {
-                                            } break;
-                                        }
-                                        if (handled) {
-                                            it = actionsAwaitingResponses.erase(it);
-                                        } else {
-                                            ++it;
-                                        }
-                                    }
-                                }
-                            }
-                        } break;
-
-                        case ActionType::ServerDisconnected: {
-                            Disconnect(*connection);
-                        } break;
-
-                        case ActionType::Join: {
-                            if (connection == nullptr) {
-                                break;
-                            }
-                            SendLineToTwitchServer(*connection, "JOIN #" + action.nickname);
-                        } break;
-
-                        case ActionType::Leave: {
-                            if (connection == nullptr) {
-                                break;
-                            }
-                            SendLineToTwitchServer(*connection, "PART #" + action.nickname);
-                        } break;
-
-                        case ActionType::SendMessage: {
-                            if (connection == nullptr) {
-                                break;
-                            }
-                            SendLineToTwitchServer(*connection, "PRIVMSG #" + action.nickname + " :" + action.message);
-                        } break;
-
-                        default: {
-                        } break;
-                    }
+                    PerformAction(std::move(action));
                     lock.lock();
                 }
                 if (!actionsAwaitingResponses.empty()) {
@@ -809,53 +1167,43 @@ namespace Twitch {
         const std::string& nickname,
         const std::string& token
     ) {
-        std::lock_guard< decltype(impl_->mutex) > lock(impl_->mutex);
         Action action;
-        action.type = ActionType::LogIn;
+        action.type = Action::Type::LogIn;
         action.nickname = nickname;
         action.token = token;
-        impl_->actionsToBePerformed.push_back(action);
-        impl_->wakeWorker.notify_one();
+        impl_->PostAction(std::move(action));
     }
 
     void Messaging::LogOut(const std::string& farewell) {
-        std::lock_guard< decltype(impl_->mutex) > lock(impl_->mutex);
         Action action;
-        action.type = ActionType::LogOut;
+        action.type = Action::Type::LogOut;
         action.message = farewell;
-        impl_->actionsToBePerformed.push_back(action);
-        impl_->wakeWorker.notify_one();
+        impl_->PostAction(std::move(action));
     }
 
     void Messaging::Join(const std::string& channel) {
-        std::lock_guard< decltype(impl_->mutex) > lock(impl_->mutex);
         Action action;
-        action.type = ActionType::Join;
+        action.type = Action::Type::Join;
         action.nickname = channel;
-        impl_->actionsToBePerformed.push_back(action);
-        impl_->wakeWorker.notify_one();
+        impl_->PostAction(std::move(action));
     }
 
     void Messaging::Leave(const std::string& channel) {
-        std::lock_guard< decltype(impl_->mutex) > lock(impl_->mutex);
         Action action;
-        action.type = ActionType::Leave;
+        action.type = Action::Type::Leave;
         action.nickname = channel;
-        impl_->actionsToBePerformed.push_back(action);
-        impl_->wakeWorker.notify_one();
+        impl_->PostAction(std::move(action));
     }
 
     void Messaging::SendMessage(
         const std::string& channel,
         const std::string& message
     ) {
-        std::lock_guard< decltype(impl_->mutex) > lock(impl_->mutex);
         Action action;
-        action.type = ActionType::SendMessage;
+        action.type = Action::Type::SendMessage;
         action.nickname = channel;
         action.message = message;
-        impl_->actionsToBePerformed.push_back(action);
-        impl_->wakeWorker.notify_one();
+        impl_->PostAction(std::move(action));
     }
 
 }
