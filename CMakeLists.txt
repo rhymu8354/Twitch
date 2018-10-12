@@ -12,6 +12,8 @@ set(Headers
 )
 
 set(Sources
+    src/Message.cpp
+    src/Message.hpp
     src/Messaging.cpp
 )
 
