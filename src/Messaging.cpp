@@ -427,22 +427,19 @@ namespace Twitch {
          * This method is called whenever the user agent disconnects from the
          * Twitch server.
          *
-         * @param[in,out] connection
-         *     This is the connection to disconnect.
-         *
          * @param[in] farewell
          *     If not empty, the user agent should sent a QUIT command before
          *     disconnecting, and this is a message to include in the
          *     QUIT command.
          */
-        void Disconnect(
-            Connection& connection,
-            const std::string farewell = ""
-        ) {
-            if (!farewell.empty()) {
-                connection.Send("QUIT :" + farewell + CRLF);
+        void Disconnect(const std::string farewell = "") {
+            if (connection == nullptr) {
+                return;
             }
-            connection.Disconnect();
+            if (!farewell.empty()) {
+                connection->Send("QUIT :" + farewell + CRLF);
+            }
+            connection->Disconnect();
             user->LogOut();
         }
 
@@ -638,7 +635,7 @@ namespace Twitch {
          *     This is the action to time out.
          */
         void TimeoutActionLogIn(Action&& action) {
-            Disconnect(*connection, "Timeout waiting for capability list");
+            Disconnect("Timeout waiting for capability list");
         }
 
         /**
@@ -683,7 +680,7 @@ namespace Twitch {
          *     This is the action to time out.
          */
         void TimeoutActionRequestCaps(Action&& action) {
-            Disconnect(*connection, "Timeout waiting for response to capability request");
+            Disconnect("Timeout waiting for response to capability request");
         }
 
         /**
@@ -720,7 +717,7 @@ namespace Twitch {
          *     This is the action to time out.
          */
         void TimeoutActionAwaitMotd(Action&& action) {
-            Disconnect(*connection, "Timeout waiting for MOTD");
+            Disconnect("Timeout waiting for MOTD");
         }
 
         /**
@@ -730,9 +727,7 @@ namespace Twitch {
          *     This is the action to perform.
          */
         void PerformActionLogOut(Action&& action) {
-            if (connection != nullptr) {
-                Disconnect(*connection, action.message);
-            }
+            Disconnect(action.message);
         }
 
         /**
@@ -890,7 +885,7 @@ namespace Twitch {
          *     This is the action to perform.
          */
         void PerformActionServerDisconnected(Action&& action) {
-            Disconnect(*connection);
+            Disconnect();
         }
 
         /**
