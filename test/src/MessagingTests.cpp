@@ -318,13 +318,12 @@ namespace {
             );
         }
 
-        bool AwaitMessage() {
+        bool AwaitMessages(size_t numMessages) {
             std::unique_lock< std::mutex > lock(mutex);
-            const auto numMessagesBefore = messages.size();
             return wakeCondition.wait_for(
                 lock,
                 std::chrono::milliseconds(100),
-                [this, numMessagesBefore]{ return messages.size() != numMessagesBefore; }
+                [this, numMessages]{ return messages.size() == numMessages; }
             );
         }
 
@@ -821,7 +820,7 @@ TEST_F(MessagingTests, ReceiveMessages) {
     );
 
     // Wait for the message to be received.
-    ASSERT_TRUE(user->AwaitMessage());
+    ASSERT_TRUE(user->AwaitMessages(1));
     ASSERT_EQ(1, user->messages.size());
     EXPECT_EQ("foobar1125", user->messages[0].channel);
     EXPECT_EQ("foobar1126", user->messages[0].user);
