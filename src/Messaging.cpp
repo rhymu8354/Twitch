@@ -981,7 +981,7 @@ namespace Twitch {
         }
     };
 
-    Messaging::~Messaging() {
+    Messaging::~Messaging() noexcept {
         impl_->StopWorker();
         impl_->worker.join();
     }
