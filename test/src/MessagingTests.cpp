@@ -450,6 +450,7 @@ struct MessagingTests
         mockServer->ReturnToClient(
             ":foobar1124!foobar1124@foobar1124.tmi.twitch.tv JOIN #" + channel + CRLF
         );
+        (void)user->AwaitJoin();
     }
 
     // ::testing::Test
