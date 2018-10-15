@@ -270,23 +270,21 @@ namespace {
             );
         }
 
-        bool AwaitJoin() {
+        bool AwaitJoins(size_t numJoins) {
             std::unique_lock< std::mutex > lock(mutex);
-            const auto numJoinsBefore = joins.size();
             return wakeCondition.wait_for(
                 lock,
                 std::chrono::milliseconds(100),
-                [this, numJoinsBefore]{ return joins.size() != numJoinsBefore; }
+                [this, numJoins]{ return joins.size() == numJoins; }
             );
         }
 
-        bool AwaitLeave() {
+        bool AwaitLeaves(size_t numParts) {
             std::unique_lock< std::mutex > lock(mutex);
-            const auto numPartsBefore = parts.size();
             return wakeCondition.wait_for(
                 lock,
                 std::chrono::milliseconds(100),
-                [this, numPartsBefore]{ return parts.size() != numPartsBefore; }
+                [this, numParts]{ return parts.size() == numParts; }
             );
         }
 
@@ -448,7 +446,7 @@ struct MessagingTests
         mockServer->ReturnToClient(
             ":foobar1124!foobar1124@foobar1124.tmi.twitch.tv JOIN #" + channel + CRLF
         );
-        (void)user->AwaitJoin();
+        (void)user->AwaitJoins(1);
     }
 
     // ::testing::Test
@@ -802,8 +800,7 @@ TEST_F(MessagingTests, JoinChannel) {
     mockServer->ReturnToClient(
         ":foobar1124!foobar1124@foobar1124.tmi.twitch.tv JOIN #foobar1125" + CRLF
     );
-    ASSERT_TRUE(user->AwaitJoin());
-    ASSERT_EQ(1, user->joins.size());
+    ASSERT_TRUE(user->AwaitJoins(1));
     EXPECT_EQ("foobar1125", user->joins[0].channel);
     EXPECT_EQ("foobar1124", user->joins[0].user);
 }
@@ -826,8 +823,7 @@ TEST_F(MessagingTests, LeaveChannel) {
     mockServer->ReturnToClient(
         ":foobar1124!foobar1124@foobar1124.tmi.twitch.tv PART #foobar1125" + CRLF
     );
-    ASSERT_TRUE(user->AwaitLeave());
-    ASSERT_EQ(1, user->parts.size());
+    ASSERT_TRUE(user->AwaitLeaves(1));
     EXPECT_EQ("foobar1125", user->parts[0].channel);
     EXPECT_EQ("foobar1124", user->parts[0].user);
 }
