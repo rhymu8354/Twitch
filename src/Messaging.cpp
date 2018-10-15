@@ -833,9 +833,10 @@ namespace Twitch {
             if (nicknameDelimiter == std::string::npos) {
                 return;
             }
-            const auto nickname = message.prefix.substr(0, nicknameDelimiter);
-            const auto channel = message.parameters[0].substr(1);
-            user->Join(channel, nickname);
+            MembershipInfo membershipInfo;
+            membershipInfo.user = message.prefix.substr(0, nicknameDelimiter);
+            membershipInfo.channel = message.parameters[0].substr(1);
+            user->Join(std::move(membershipInfo));
         }
 
         /**
@@ -856,9 +857,10 @@ namespace Twitch {
             if (nicknameDelimiter == std::string::npos) {
                 return;
             }
-            const auto nickname = message.prefix.substr(0, nicknameDelimiter);
-            const auto channel = message.parameters[0].substr(1);
-            user->Leave(channel, nickname);
+            MembershipInfo membershipInfo;
+            membershipInfo.user = message.prefix.substr(0, nicknameDelimiter);
+            membershipInfo.channel = message.parameters[0].substr(1);
+            user->Leave(std::move(membershipInfo));
         }
 
         /**

@@ -70,6 +70,22 @@ namespace Twitch {
         };
 
         /**
+         * This contains all the information about a membership command
+         * received.
+         */
+        struct MembershipInfo {
+            /**
+             * This is the channel whose membership changed.
+             */
+            std::string channel;
+
+            /**
+             * This is the user whose membership to the channel changed.
+             */
+            std::string user;
+        };
+
+        /**
          * This is a base class and interface to be implemented by the user of
          * this class, in order to receive notifications, events, and other
          * callbacks from the class.
@@ -98,31 +114,21 @@ namespace Twitch {
             /**
              * This is called whenever a user joins a channel.
              *
-             * @param[in] channel
-             *     This is the name of the channel the user joined.
-             *
-             * @param[in] user
-             *     This is the nickname of the user who joined the channel.
+             * @param[in] membershipInfo
+             *     This holds the information about which user and channel
+             *     were involved.
              */
-            virtual void Join(
-                const std::string& channel,
-                const std::string& user
-            ) {
+            virtual void Join(MembershipInfo&& membershipInfo) {
             }
 
             /**
              * This is called whenever a user leaves a channel.
              *
-             * @param[in] channel
-             *     This is the name of the channel the user left.
-             *
-             * @param[in] user
-             *     This is the nickname of the user who left the channel.
+             * @param[in] membershipInfo
+             *     This holds the information about which user and channel
+             *     were involved.
              */
-            virtual void Leave(
-                const std::string& channel,
-                const std::string& user
-            ) {
+            virtual void Leave(MembershipInfo&& membershipInfo) {
             }
 
             /**

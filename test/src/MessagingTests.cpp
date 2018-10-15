@@ -232,36 +232,6 @@ namespace {
     };
 
     /**
-     * This contains all the information received for a single Join callback.
-     */
-    struct JoinInfo {
-        /**
-         * This is the channel where the user joined.
-         */
-        std::string channel;
-
-        /**
-         * This is the nickname of the user who joined.
-         */
-        std::string user;
-    };
-
-    /**
-     * This contains all the information received for a single Leave callback.
-     */
-    struct PartInfo {
-        /**
-         * This is the channel where the user left.
-         */
-        std::string channel;
-
-        /**
-         * This is the nickname of the user who left.
-         */
-        std::string user;
-    };
-
-    /**
      * This represents the user of the unit under test, and receives all
      * notifications, events, and other callbacks from the unit under test.
      */
@@ -272,8 +242,8 @@ namespace {
 
         bool loggedIn = false;
         bool loggedOut = false;
-        std::vector< JoinInfo > joins;
-        std::vector< PartInfo > parts;
+        std::vector< Twitch::Messaging::MembershipInfo > joins;
+        std::vector< Twitch::Messaging::MembershipInfo > parts;
         std::vector< Twitch::Messaging::MessageInfo > messages;
         std::vector< Twitch::Messaging::WhisperInfo > whispers;
         std::vector< std::string > notices;
@@ -362,26 +332,18 @@ namespace {
         }
 
         virtual void Join(
-            const std::string& channel,
-            const std::string& user
+            Twitch::Messaging::MembershipInfo&& membershipInfo
         ) override {
             std::lock_guard< std::mutex > lock(mutex);
-            JoinInfo joinInfo;
-            joinInfo.channel = channel;
-            joinInfo.user = user;
-            joins.push_back(joinInfo);
+            joins.push_back(std::move(membershipInfo));
             wakeCondition.notify_one();
         }
 
         virtual void Leave(
-            const std::string& channel,
-            const std::string& user
+            Twitch::Messaging::MembershipInfo&& membershipInfo
         ) override {
             std::lock_guard< std::mutex > lock(mutex);
-            PartInfo partInfo;
-            partInfo.channel = channel;
-            partInfo.user = user;
-            parts.push_back(partInfo);
+            parts.push_back(std::move(membershipInfo));
             wakeCondition.notify_one();
         }
 
