@@ -420,8 +420,11 @@ struct MessagingTests
     /**
      * This is a convenience method which performs all the necessary steps to
      * log into the mock Twitch server.
+     *
+     * @param[in] includeTags
+     *     If true, also request the twitch.tv/tags capability from the server
      */
-    void LogIn() {
+    void LogIn(bool includeTags = false) {
         const std::string nickname = "foobar1124";
         const std::string token = "alskdfjasdf87sdfsdffsd";
         tmi.LogIn(nickname, token);
@@ -430,9 +433,15 @@ struct MessagingTests
             ":tmi.twitch.tv CAP * LS :twitch.tv/membership twitch.tv/tags twitch.tv/commands" + CRLF
         );
         (void)mockServer->AwaitCapReq();
-        mockServer->ReturnToClient(
-            ":tmi.twitch.tv CAP * ACK :twitch.tv/commands" + CRLF
-        );
+        if (includeTags) {
+            mockServer->ReturnToClient(
+                ":tmi.twitch.tv CAP * ACK :twitch.tv/commands twitch.tv/tags" + CRLF
+            );
+        } else {
+            mockServer->ReturnToClient(
+                ":tmi.twitch.tv CAP * ACK :twitch.tv/commands" + CRLF
+            );
+        }
         (void)mockServer->AwaitNickname();
         mockServer->ReturnToClient(
             ":tmi.twitch.tv 372 <user> :You are in a maze of twisty passages." + CRLF
@@ -501,7 +510,7 @@ TEST_F(MessagingTests, DiagnosticsSubscription) {
     );
     (void)mockServer->AwaitCapReq();
     mockServer->ReturnToClient(
-        ":tmi.twitch.tv CAP * ACK :twitch.tv/commands twitch.tv/membership" + CRLF
+        ":tmi.twitch.tv CAP * ACK :twitch.tv/commands twitch.tv/membership twitch.tv/tags" + CRLF
         + ":tmi.twitch.tv 372 <user> :You are in a maze of twisty passages." + CRLF
         + ":tmi.twitch.tv 376 <user> :>" + CRLF
     );
@@ -511,8 +520,8 @@ TEST_F(MessagingTests, DiagnosticsSubscription) {
         (std::vector< std::string >{
             "TMI[0]: < CAP LS 302",
             "TMI[0]: > :tmi.twitch.tv CAP * LS :twitch.tv/membership twitch.tv/tags twitch.tv/commands",
-            "TMI[0]: < CAP REQ :twitch.tv/commands twitch.tv/membership",
-            "TMI[0]: > :tmi.twitch.tv CAP * ACK :twitch.tv/commands twitch.tv/membership",
+            "TMI[0]: < CAP REQ :twitch.tv/commands twitch.tv/membership twitch.tv/tags",
+            "TMI[0]: > :tmi.twitch.tv CAP * ACK :twitch.tv/commands twitch.tv/membership twitch.tv/tags",
             "TMI[0]: < CAP END",
             "TMI[0]: < PASS oauth:**********************",
             "TMI[0]: < NICK foobar1124",
@@ -577,12 +586,12 @@ TEST_F(MessagingTests, LogIntoChat) {
     );
     EXPECT_TRUE(mockServer->AwaitCapReq());
     EXPECT_EQ(
-        "twitch.tv/commands twitch.tv/membership",
+        "twitch.tv/commands twitch.tv/membership twitch.tv/tags",
         mockServer->capsRequested
     );
     EXPECT_FALSE(mockServer->AwaitCapEnd());
     mockServer->ReturnToClient(
-        ":tmi.twitch.tv CAP * ACK :twitch.tv/commands twitch.tv/membership" + CRLF
+        ":tmi.twitch.tv CAP * ACK :twitch.tv/commands twitch.tv/membership twitch.tv/tags" + CRLF
     );
     EXPECT_TRUE(mockServer->AwaitCapEnd());
     EXPECT_TRUE(mockServer->AwaitNickname());
@@ -600,7 +609,7 @@ TEST_F(MessagingTests, LogIntoChat) {
     EXPECT_EQ(
         (std::vector< std::string >{
             "CAP LS 302",
-            "CAP REQ :twitch.tv/commands twitch.tv/membership",
+            "CAP REQ :twitch.tv/commands twitch.tv/membership twitch.tv/tags",
             "CAP END",
             "PASS oauth:" + token,
             "NICK " + nickname,
@@ -842,7 +851,7 @@ TEST_F(MessagingTests, LeaveChannelWhenNotConnected) {
     EXPECT_FALSE(mockServer->AwaitLineReceived("PART #foobar1125"));
 }
 
-TEST_F(MessagingTests, ReceiveMessages) {
+TEST_F(MessagingTests, ReceiveMessagesNoTagsCapability) {
     // Log in and join a channel.
     LogIn();
     Join("foobar1125");
@@ -859,6 +868,59 @@ TEST_F(MessagingTests, ReceiveMessages) {
     EXPECT_EQ("foobar1125", user->messages[0].channel);
     EXPECT_EQ("foobar1126", user->messages[0].user);
     EXPECT_EQ("Hello, World!", user->messages[0].message);
+}
+
+TEST_F(MessagingTests, ReceiveMessagesWithTagsCapability) {
+    // Log in (with tags capability) and join a channel.
+    LogIn(true);
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate someone else chatting in the
+    // room.
+    mockServer->ReturnToClient(
+        // tags
+        "@badges=moderator/1,subscriber/12,partner/1;color=#5B99FF;"
+        "display-name=FooBarMaster;"
+        "emotes=30259:6-12,54-60/64138:29-37;"
+        "flags=;"
+        "mod=1;"
+        "subscriber=1;"
+        "turbo=0;"
+        "user-type=mod "
+
+        // prefix
+        ":foobar1126!foobar1126@foobar1126.tmi.twitch.tv "
+
+        // command
+        "PRIVMSG "
+
+        // arguments
+        "#foobar1125 :Hello HeyGuys This is a test SeemsGood Also did I say HeyGuys hello?" + CRLF
+    );
+
+    // Wait for the message to be received.
+    ASSERT_TRUE(user->AwaitMessages(1));
+    ASSERT_EQ(1, user->messages.size());
+    EXPECT_EQ("foobar1125", user->messages[0].channel);
+    EXPECT_EQ("foobar1126", user->messages[0].user);
+    EXPECT_EQ("Hello HeyGuys This is a test SeemsGood Also did I say HeyGuys hello?", user->messages[0].message);
+    EXPECT_EQ("FooBarMaster", user->messages[0].tags.displayName);
+    EXPECT_EQ(
+        (std::set< std::string >{
+            "moderator/1",
+            "subscriber/12",
+            "partner/1",
+        }),
+        user->messages[0].tags.badges
+    );
+    EXPECT_EQ(
+        (std::map< int, std::vector< std::pair< int, int > > >{
+            {30259, {{6, 12}, {54, 60}}},
+            {64138, {{29, 37}}},
+        }),
+        user->messages[0].tags.emotes
+    );
+    EXPECT_EQ(0x5B99FF, user->messages[0].tags.color);
 }
 
 TEST_F(MessagingTests, SendMessage) {
@@ -1022,12 +1084,12 @@ TEST_F(MessagingTests, AnonymousConnection) {
     );
     EXPECT_TRUE(mockServer->AwaitCapReq());
     EXPECT_EQ(
-        "twitch.tv/commands twitch.tv/membership",
+        "twitch.tv/commands twitch.tv/membership twitch.tv/tags",
         mockServer->capsRequested
     );
     EXPECT_FALSE(mockServer->AwaitCapEnd());
     mockServer->ReturnToClient(
-        ":tmi.twitch.tv CAP * ACK :twitch.tv/commands twitch.tv/membership" + CRLF
+        ":tmi.twitch.tv CAP * ACK :twitch.tv/commands twitch.tv/membership twitch.tv/tags" + CRLF
     );
     EXPECT_TRUE(mockServer->AwaitCapEnd());
     EXPECT_TRUE(mockServer->AwaitNickname());

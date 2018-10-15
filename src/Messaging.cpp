@@ -403,7 +403,7 @@ namespace Twitch {
          *     This holds the information needed to log into Twitch chat.
          */
         void RequestCapabilities(Action action) {
-            SendLineToTwitchServer(*connection, "CAP REQ :twitch.tv/commands twitch.tv/membership");
+            SendLineToTwitchServer(*connection, "CAP REQ :twitch.tv/commands twitch.tv/membership twitch.tv/tags");
             action.type = Action::Type::RequestCaps;
             if (timeKeeper != nullptr) {
                 action.expiration = timeKeeper->GetCurrentTime() + LOG_IN_TIMEOUT_SECONDS;
@@ -650,6 +650,7 @@ namespace Twitch {
                 if (
                     (capsSupported.find("twitch.tv/commands") == capsSupported.end())
                     || (capsSupported.find("twitch.tv/membership") == capsSupported.end())
+                    || (capsSupported.find("twitch.tv/tags") == capsSupported.end())
                 ) {
                     EndCapabilitiesHandshakeAndAuthenticate(action);
                 } else {
@@ -882,6 +883,7 @@ namespace Twitch {
             }
             const auto nickname = ExtractNicknameFromPrefix(message.prefix);
             MessageInfo messageInfo;
+            messageInfo.tags = message.tags;
             messageInfo.user = nickname;
             messageInfo.channel = message.parameters[0].substr(1);
             messageInfo.message = message.parameters[1];

@@ -11,6 +11,7 @@
 
 #include <string>
 #include <SystemAbstractions/DiagnosticsSender.hpp>
+#include <Twitch/Messaging.hpp>
 #include <vector>
 
 namespace Twitch {
@@ -21,6 +22,11 @@ namespace Twitch {
      */
     struct Message {
         // Properties
+
+        /**
+         * This contains information provided in the message's tags.
+         */
+        Messaging::TagsInfo tags;
 
         /**
          * If this is not an empty string, the message included a prefix,

@@ -14,8 +14,11 @@
 
 #include <functional>
 #include <memory>
+#include <map>
+#include <set>
 #include <string>
 #include <SystemAbstractions/DiagnosticsSender.hpp>
+#include <vector>
 
 namespace Twitch {
 
@@ -34,10 +37,55 @@ namespace Twitch {
         typedef std::function< std::shared_ptr< Connection >() > ConnectionFactory;
 
         /**
+         * This contains information about the tags of a message.
+         */
+        struct TagsInfo {
+            /**
+             * This is the name of the user as it should be displayed in the
+             * user interface, with proper capitalization.
+             */
+            std::string displayName;
+
+            /**
+             * This is the set of badges meant to be displayed in front of the
+             * user's name.
+             */
+            std::set< std::string > badges;
+
+            /**
+             * This contains information about the emotes used in the message.
+             *
+             * Each key is the ID of an emote.  One may use this ID to obtain
+             * an image corresponding to the emote, using this URL template:
+             *   http://static-cdn.jtvnw.net/emoticons/v1/<emote ID>/<size>
+             * Where size is 1.0, 2.0 or 3.0.
+             * (For more information, see: https://dev.twitch.tv/docs/irc/tags/)
+             *
+             * Each value is a vector of instances of the emote.  Each instance
+             * is a pair consisting of the indecies of the first and last
+             * characters corresponding to the emote.
+             */
+            std::map< int, std::vector< std::pair< int, int > > > emotes;
+
+            /**
+             * This is the color in which to draw the user's display name.  The
+             * color is in RRGGBB format (24 bits, where bits 23-16 correspond
+             * to the red channel, bits 15-8 correspond to the green channel,
+             * and bits 7-0 correspond to the blue channel).
+             */
+            uint32_t color = 0xFFFFFF;
+        };
+
+        /**
          * This contains all the information about a message received in a
          * channel.
          */
         struct MessageInfo {
+            /**
+             * This contains information provided in the message's tags.
+             */
+            TagsInfo tags;
+
             /**
              * This is the channel to which the message was sent.
              */
