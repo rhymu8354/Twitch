@@ -44,6 +44,7 @@ namespace {
         bool connectionProblem = false;
         bool capLsReceived = false;
         bool capEndReceived = false;
+        bool wasPasswordOffered = false;
         bool nickSetBeforeCapEnd = false;
         bool wasCapsRequested = false;
         std::string capsRequested;
@@ -108,6 +109,10 @@ namespace {
 
         std::string GetNicknameOffered() {
             return nicknameOffered;
+        }
+
+        bool WasPasswordOffered() {
+            return wasPasswordOffered;
         }
 
         std::string GetPasswordOffered() {
@@ -187,6 +192,7 @@ namespace {
             linesReceived.push_back(line);
             dataReceived = dataReceived.substr(lineEnd + CRLF.length());
             if (line.substr(0, 5) == "PASS ") {
+                wasPasswordOffered = true;
                 passwordOffered = line.substr(5);
                 passwordOffered = SystemAbstractions::Trim(passwordOffered);
             } else if (line.substr(0, 5) == "NICK ") {
@@ -1003,4 +1009,70 @@ TEST_F(MessagingTests, SomeoneElseLeavesChannelWeHaveJoined) {
     ASSERT_EQ(1, user->parts.size());
     EXPECT_EQ("foobar1125", user->parts[0].channel);
     EXPECT_EQ("foobar1126", user->parts[0].user);
+}
+
+TEST_F(MessagingTests, AnonymousConnection) {
+    // Log in anonymously.
+    tmi.LogInAnonymously();
+    EXPECT_TRUE(mockServer->AwaitCapLs());
+    EXPECT_EQ("302", mockServer->capLsArg);
+    EXPECT_FALSE(mockServer->AwaitCapEnd());
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv CAP * LS :twitch.tv/membership twitch.tv/tags twitch.tv/commands" + CRLF
+    );
+    EXPECT_TRUE(mockServer->AwaitCapReq());
+    EXPECT_EQ(
+        "twitch.tv/commands twitch.tv/membership",
+        mockServer->capsRequested
+    );
+    EXPECT_FALSE(mockServer->AwaitCapEnd());
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv CAP * ACK :twitch.tv/commands twitch.tv/membership" + CRLF
+    );
+    EXPECT_TRUE(mockServer->AwaitCapEnd());
+    EXPECT_TRUE(mockServer->AwaitNickname());
+    EXPECT_FALSE(mockServer->nickSetBeforeCapEnd);
+    EXPECT_FALSE(user->AwaitLogIn());
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv 372 <user> :You are in a maze of twisty passages." + CRLF
+        + ":tmi.twitch.tv 376 <user> :>" + CRLF
+    );
+    ASSERT_TRUE(user->AwaitLogIn());
+    EXPECT_TRUE(mockServer->IsConnected());
+    EXPECT_FALSE(mockServer->WasThereAConnectionProblem());
+    EXPECT_FALSE(mockServer->WasPasswordOffered());
+    const auto nickname = mockServer->GetNicknameOffered();
+    EXPECT_EQ("justinfan", nickname.substr(0, 9));
+    intmax_t scratch;
+    EXPECT_EQ(
+        SystemAbstractions::ToIntegerResult::Success,
+        SystemAbstractions::ToInteger(nickname.substr(9), scratch)
+    );
+    EXPECT_FALSE(mockServer->IsDisconnected());
+
+    // Join a channel.
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate someone else chatting in the
+    // room.
+    mockServer->ReturnToClient(
+        ":foobar1126!foobar1126@foobar1126.tmi.twitch.tv PRIVMSG #foobar1125 :Hello, World!" + CRLF
+    );
+
+    // Wait for the message to be received.
+    ASSERT_TRUE(user->AwaitMessages(1));
+    ASSERT_EQ(1, user->messages.size());
+    EXPECT_EQ("foobar1125", user->messages[0].channel);
+    EXPECT_EQ("foobar1126", user->messages[0].user);
+    EXPECT_EQ("Hello, World!", user->messages[0].message);
+
+    // Send a message to the channel we just joined.
+    mockServer->ClearLinesReceived();
+    tmi.SendMessage("foobar1125", "Hello, World!");
+    tmi.SendWhisper("foobar1126", "HeyGuys");
+    EXPECT_EQ(
+        (std::vector< std::string >{
+        }),
+        mockServer->GetLinesReceived()
+    );
 }

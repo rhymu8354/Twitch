@@ -17,6 +17,7 @@
 #include <map>
 #include <mutex>
 #include <set>
+#include <stdlib.h>
 #include <string>
 #include <SystemAbstractions/StringExtensions.hpp>
 #include <thread>
@@ -126,6 +127,12 @@ namespace {
          * with some context or text to be sent to the server.
          */
         std::string message;
+
+        /**
+         * This flag is used when the action may be done anonymously or not,
+         * to indicate whether or not to be anonymous.
+         */
+        bool anonymous = false;
 
         /**
          * This is the time, according to the time keeper, at which
@@ -281,25 +288,42 @@ namespace Twitch {
         // ⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇
         // --------------------------------------------------------------------
 
-        // This is the interface to the current connection to the Twitch
-        // server, if we are connected.
+        /**
+         * This is the interface to the current connection to the Twitch
+         * server, if we are connected.
+         */
         std::shared_ptr< Connection > connection;
 
-        // This is essentially just a buffer to receive raw characters from
-        // the Twitch server, until a complete line has been received,
-        // removed from this buffer, and handled appropriately.
+        /**
+         * This is essentially just a buffer to receive raw characters from the
+         * Twitch server, until a complete line has been received, removed from
+         * this buffer, and handled appropriately.
+         */
         std::string dataReceived;
 
-        // This flag indicates whether or not the client has finished
-        // logging into the Twitch server (we've received the Message Of
-        // The Day (MOTD) from the server).
+        /**
+         * If true, this flag indicates that the user is not going to be
+         * offering an OAuth token to authenticate as a registered user/bot,
+         * and will only be able to receive messages, not send them.
+         */
+        bool anonymous = false;
+
+        /**
+         * This flag indicates whether or not the client has finished
+         * logging into the Twitch server (we've received the Message Of
+         * The Day (MOTD) from the server).
+         */
         bool loggedIn = false;
 
-        // This holds onto any actions for which the worker is awaiting a
-        // response from the server.
+        /**
+         * This holds onto any actions for which the worker is awaiting a
+         * response from the server.
+         */
         std::list< Action > actionsAwaitingResponses;
 
-        // These are the IRCv3 capabilities advertised by the server.
+        /**
+         * These are the IRCv3 capabilities advertised by the server.
+         */
         std::set< std::string > capsSupported;
 
         // --------------------------------------------------------------------
@@ -375,21 +399,12 @@ namespace Twitch {
          * This method is called to request additional IRC capabilities for the
          * connection with the Twitch chat server.
          *
-         * @param[in] nickname
-         *     This is the nickname with which to log into Twitch chat.
-         *
-         * @param[in] token
-         *     This is the OAuth token to use to authenticate with Twitch chat.
+         * @param[in] action
+         *     This holds the information needed to log into Twitch chat.
          */
-        void RequestCapabilities(
-            const std::string& nickname,
-            const std::string& token
-        ) {
+        void RequestCapabilities(Action action) {
             SendLineToTwitchServer(*connection, "CAP REQ :twitch.tv/commands twitch.tv/membership");
-            Action action;
             action.type = Action::Type::RequestCaps;
-            action.nickname = nickname;
-            action.token = token;
             if (timeKeeper != nullptr) {
                 action.expiration = timeKeeper->GetCurrentTime() + LOG_IN_TIMEOUT_SECONDS;
             }
@@ -402,23 +417,16 @@ namespace Twitch {
          * information, and begin waiting for the Message of the Day (MOTD)
          * from the server, to indicate that we're logged in successfully.
          *
-         * @param[in] nickname
-         *     This is the nickname with which to log into Twitch chat.
-         *
-         * @param[in] token
-         *     This is the OAuth token to use to authenticate with Twitch chat.
+         * @param[in] action
+         *     This holds the information needed to log into Twitch chat.
          */
-        void EndCapabilitiesHandshakeAndAuthenticate(
-            const std::string& nickname,
-            const std::string& token
-        ) {
+        void EndCapabilitiesHandshakeAndAuthenticate(Action action) {
             SendLineToTwitchServer(*connection, "CAP END");
-            SendLineToTwitchServer(*connection, "PASS oauth:" + token);
-            SendLineToTwitchServer(*connection, "NICK " + nickname);
-            Action action;
+            if (!anonymous) {
+                SendLineToTwitchServer(*connection, "PASS oauth:" + action.token);
+            }
+            SendLineToTwitchServer(*connection, "NICK " + action.nickname);
             action.type = Action::Type::AwaitMotd;
-            action.nickname = nickname;
-            action.token = token;
             if (timeKeeper != nullptr) {
                 action.expiration = timeKeeper->GetCurrentTime() + LOG_IN_TIMEOUT_SECONDS;
             }
@@ -596,6 +604,7 @@ namespace Twitch {
             );
             if (connection->Connect()) {
                 capsSupported.clear();
+                anonymous = action.anonymous;
                 SendLineToTwitchServer(*connection, "CAP LS 302");
                 if (timeKeeper != nullptr) {
                     action.expiration = timeKeeper->GetCurrentTime() + LOG_IN_TIMEOUT_SECONDS;
@@ -642,15 +651,9 @@ namespace Twitch {
                     (capsSupported.find("twitch.tv/commands") == capsSupported.end())
                     || (capsSupported.find("twitch.tv/membership") == capsSupported.end())
                 ) {
-                    EndCapabilitiesHandshakeAndAuthenticate(
-                        action.nickname,
-                        action.token
-                    );
+                    EndCapabilitiesHandshakeAndAuthenticate(action);
                 } else {
-                    RequestCapabilities(
-                        action.nickname,
-                        action.token
-                    );
+                    RequestCapabilities(action);
                 }
                 return true;
             }
@@ -694,10 +697,7 @@ namespace Twitch {
             ) {
                 return false;
             }
-            EndCapabilitiesHandshakeAndAuthenticate(
-                action.nickname,
-                action.token
-            );
+            EndCapabilitiesHandshakeAndAuthenticate(action);
             return true;
         }
 
@@ -1004,6 +1004,9 @@ namespace Twitch {
             if (connection == nullptr) {
                 return;
             }
+            if (anonymous) {
+                return;
+            }
             SendLineToTwitchServer(*connection, "PRIVMSG #" + action.nickname + " :" + action.message);
         }
 
@@ -1015,6 +1018,9 @@ namespace Twitch {
          */
         void PerformActionSendWhisper(Action&& action) {
             if (connection == nullptr) {
+                return;
+            }
+            if (anonymous) {
                 return;
             }
             SendLineToTwitchServer(*connection, "PRIVMSG #jtv :.w " + action.nickname + " " + action.message);
@@ -1112,6 +1118,18 @@ namespace Twitch {
         action.type = Action::Type::LogIn;
         action.nickname = nickname;
         action.token = token;
+        action.anonymous = false;
+        impl_->PostAction(std::move(action));
+    }
+
+    void Messaging::LogInAnonymously() {
+        Action action;
+        action.type = Action::Type::LogIn;
+        action.nickname = SystemAbstractions::sprintf(
+            "justinfan%d",
+            rand()
+        );
+        action.anonymous = true;
         impl_->PostAction(std::move(action));
     }
 

@@ -230,7 +230,8 @@ namespace Twitch {
         void SetUser(std::shared_ptr< User > user);
 
         /**
-         * This method starts the process of logging into the Twitch server.
+         * This method starts the process of logging into the Twitch server as
+         * a registered user/bot.
          *
          * @param[in] nickname
          *     This is the nickname to use when logging into chat.
@@ -245,6 +246,12 @@ namespace Twitch {
             const std::string& nickname,
             const std::string& token
         );
+
+        /**
+         * This method starts the process of logging into the Twitch server
+         * anonymously.
+         */
+        void LogInAnonymously();
 
         /**
          * This method starts the process of logging out of the Twitch server.
