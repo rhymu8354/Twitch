@@ -385,7 +385,7 @@ namespace Twitch {
             const std::string& nickname,
             const std::string& token
         ) {
-            SendLineToTwitchServer(*connection, "CAP REQ :twitch.tv/commands");
+            SendLineToTwitchServer(*connection, "CAP REQ :twitch.tv/commands twitch.tv/membership");
             Action action;
             action.type = Action::Type::RequestCaps;
             action.nickname = nickname;
@@ -638,7 +638,10 @@ namespace Twitch {
             } else {
                 const auto newCapsSupported = SystemAbstractions::Split(message.parameters[2], ' ');
                 capsSupported.insert(newCapsSupported.begin(), newCapsSupported.end());
-                if (capsSupported.find("twitch.tv/commands") == capsSupported.end()) {
+                if (
+                    (capsSupported.find("twitch.tv/commands") == capsSupported.end())
+                    || (capsSupported.find("twitch.tv/membership") == capsSupported.end())
+                ) {
                     EndCapabilitiesHandshakeAndAuthenticate(
                         action.nickname,
                         action.token

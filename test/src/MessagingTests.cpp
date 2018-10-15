@@ -495,7 +495,7 @@ TEST_F(MessagingTests, DiagnosticsSubscription) {
     );
     (void)mockServer->AwaitCapReq();
     mockServer->ReturnToClient(
-        ":tmi.twitch.tv CAP * ACK :twitch.tv/commands" + CRLF
+        ":tmi.twitch.tv CAP * ACK :twitch.tv/commands twitch.tv/membership" + CRLF
         + ":tmi.twitch.tv 372 <user> :You are in a maze of twisty passages." + CRLF
         + ":tmi.twitch.tv 376 <user> :>" + CRLF
     );
@@ -505,8 +505,8 @@ TEST_F(MessagingTests, DiagnosticsSubscription) {
         (std::vector< std::string >{
             "TMI[0]: < CAP LS 302",
             "TMI[0]: > :tmi.twitch.tv CAP * LS :twitch.tv/membership twitch.tv/tags twitch.tv/commands",
-            "TMI[0]: < CAP REQ :twitch.tv/commands",
-            "TMI[0]: > :tmi.twitch.tv CAP * ACK :twitch.tv/commands",
+            "TMI[0]: < CAP REQ :twitch.tv/commands twitch.tv/membership",
+            "TMI[0]: > :tmi.twitch.tv CAP * ACK :twitch.tv/commands twitch.tv/membership",
             "TMI[0]: < CAP END",
             "TMI[0]: < PASS oauth:**********************",
             "TMI[0]: < NICK foobar1124",
@@ -570,10 +570,13 @@ TEST_F(MessagingTests, LogIntoChat) {
         ":tmi.twitch.tv CAP * LS :twitch.tv/membership twitch.tv/tags twitch.tv/commands" + CRLF
     );
     EXPECT_TRUE(mockServer->AwaitCapReq());
-    EXPECT_EQ("twitch.tv/commands", mockServer->capsRequested);
+    EXPECT_EQ(
+        "twitch.tv/commands twitch.tv/membership",
+        mockServer->capsRequested
+    );
     EXPECT_FALSE(mockServer->AwaitCapEnd());
     mockServer->ReturnToClient(
-        ":tmi.twitch.tv CAP * ACK :twitch.tv/commands" + CRLF
+        ":tmi.twitch.tv CAP * ACK :twitch.tv/commands twitch.tv/membership" + CRLF
     );
     EXPECT_TRUE(mockServer->AwaitCapEnd());
     EXPECT_TRUE(mockServer->AwaitNickname());
@@ -591,7 +594,7 @@ TEST_F(MessagingTests, LogIntoChat) {
     EXPECT_EQ(
         (std::vector< std::string >{
             "CAP LS 302",
-            "CAP REQ :twitch.tv/commands",
+            "CAP REQ :twitch.tv/commands twitch.tv/membership",
             "CAP END",
             "PASS oauth:" + token,
             "NICK " + nickname,
@@ -965,4 +968,39 @@ TEST_F(MessagingTests, ReceiveGenericNotice) {
     ASSERT_TRUE(user->AwaitNotices(1));
     ASSERT_EQ(1, user->notices.size());
     EXPECT_EQ("Grey is the new black!", user->notices[0]);
+}
+
+TEST_F(MessagingTests, SomeoneElseJoinsChannelWeHaveJoined) {
+    // Log in and join a channel.
+    LogIn();
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate someone else joining the chat.
+    mockServer->ReturnToClient(
+        ":foobar1126!foobar1126@foobar1126.tmi.twitch.tv JOIN #foobar1125" + CRLF
+    );
+
+    // Wait for the join to be received.
+    // NOTE: first join was us, second join was the other person.
+    ASSERT_TRUE(user->AwaitJoins(2));
+    ASSERT_EQ(2, user->joins.size());
+    EXPECT_EQ("foobar1125", user->joins[1].channel);
+    EXPECT_EQ("foobar1126", user->joins[1].user);
+}
+
+TEST_F(MessagingTests, SomeoneElseLeavesChannelWeHaveJoined) {
+    // Log in and join a channel.
+    LogIn();
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate someone else leaving the chat.
+    mockServer->ReturnToClient(
+        ":foobar1126!foobar1126@foobar1126.tmi.twitch.tv PART #foobar1125" + CRLF
+    );
+
+    // Wait for the join to be received.
+    ASSERT_TRUE(user->AwaitLeaves(1));
+    ASSERT_EQ(1, user->parts.size());
+    EXPECT_EQ("foobar1125", user->parts[0].channel);
+    EXPECT_EQ("foobar1126", user->parts[0].user);
 }
