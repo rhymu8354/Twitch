@@ -276,6 +276,7 @@ namespace {
         std::vector< PartInfo > parts;
         std::vector< Twitch::Messaging::MessageInfo > messages;
         std::vector< Twitch::Messaging::WhisperInfo > whispers;
+        std::vector< std::string > notices;
         std::condition_variable wakeCondition;
         std::mutex mutex;
 
@@ -337,6 +338,15 @@ namespace {
             );
         }
 
+        bool AwaitNotices(size_t numNotices) {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this, numNotices]{ return notices.size() == numNotices; }
+            );
+        }
+
         // Twitch::Messaging::User
 
         virtual void LogIn() override {
@@ -388,6 +398,14 @@ namespace {
         ) override {
             std::lock_guard< std::mutex > lock(mutex);
             whispers.push_back(std::move(whisperInfo));
+            wakeCondition.notify_one();
+        }
+
+        virtual void Notice(
+            const std::string& message
+        ) override {
+            std::lock_guard< std::mutex > lock(mutex);
+            notices.push_back(message);
             wakeCondition.notify_one();
         }
 
@@ -780,6 +798,36 @@ TEST_F(MessagingTests, LogInFailureUnexpectedDisconnect) {
     EXPECT_TRUE(mockServer->IsDisconnected());
 }
 
+TEST_F(MessagingTests, LogInFailureBadCredentials) {
+    const std::string nickname = "foobar1124";
+    const std::string token = "alskdfjasdf87sdfsdffsd";
+    tmi.LogIn(nickname, token);
+    (void)mockServer->AwaitCapLs();
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv CAP * LS :twitch.tv/membership twitch.tv/tags twitch.tv/commands" + CRLF
+    );
+    (void)mockServer->AwaitCapReq();
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv CAP * ACK :twitch.tv/commands" + CRLF
+    );
+    EXPECT_TRUE(mockServer->AwaitNickname());
+    EXPECT_FALSE(user->AwaitLogIn());
+    mockServer->ClearLinesReceived();
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv NOTICE * :Login unsuccessful" + CRLF
+    );
+    EXPECT_FALSE(user->AwaitLogIn());
+    EXPECT_TRUE(user->AwaitLogOut());
+    EXPECT_FALSE(user->loggedIn);
+    EXPECT_EQ(
+        (std::vector< std::string >{
+        }),
+        mockServer->GetLinesReceived()
+    );
+    ASSERT_EQ(1, user->notices.size());
+    EXPECT_EQ("Login unsuccessful", user->notices[0]);
+}
+
 TEST_F(MessagingTests, JoinChannel) {
     // Log in normally, before the "test" begins.
     LogIn();
@@ -943,4 +991,20 @@ TEST_F(MessagingTests, SendWhisper) {
     // Send a message to the channel we just joined.
     tmi.SendWhisper("foobar1126", "Hello, World!");
     EXPECT_TRUE(mockServer->AwaitLineReceived("PRIVMSG #jtv :.w foobar1126 Hello, World!"));
+}
+
+TEST_F(MessagingTests, ReceiveGenericNotice) {
+    // Just log in.
+    // There's no need to join any channel in order to receive notices.
+    LogIn();
+
+    // Have the pretend Twitch server simulate some kind of generic notice.
+    mockServer->ReturnToClient(
+        ":foobar1126!foobar1126@foobar1126.tmi.twitch.tv NOTICE * :Grey is the new black!" + CRLF
+    );
+
+    // Wait for the message to be received.
+    ASSERT_TRUE(user->AwaitNotices(1));
+    ASSERT_EQ(1, user->notices.size());
+    EXPECT_EQ("Grey is the new black!", user->notices[0]);
 }

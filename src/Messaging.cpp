@@ -556,6 +556,28 @@ namespace Twitch {
         }
 
         /**
+         * This method is used as an action processor when the action should
+         * just be discarded without actually doing anything more.
+         *
+         * @param[in,out] action
+         *     This is the action for which to process the given message.
+         *
+         * @param[in] message
+         *     This holds information about the message to process
+         *     within the context of the given action.
+         *
+         * @return
+         *     An indication of whether or not the action was completed by
+         *     processing the given message is returned.
+         */
+        bool DiscardAction(
+            Action& action,
+            const Message& message
+        ) {
+            return false;
+        }
+
+        /**
          * This method performs the given LogIn action.
          *
          * @param[in] action
@@ -747,6 +769,7 @@ namespace Twitch {
                 {"PRIVMSG", &Impl::HandleServerCommandPrivMsg},
                 {"CAP", &Impl::HandleServerCommandCap},
                 {"WHISPER", &Impl::HandleServerCommandWhisper},
+                {"NOTICE", &Impl::HandleServerCommandNotice},
             };
             dataReceived += action.message;
             Message message;
@@ -897,6 +920,37 @@ namespace Twitch {
             whisperInfo.user = nickname;
             whisperInfo.message = message.parameters[1];
             user->Whisper(std::move(whisperInfo));
+        }
+
+        /**
+         * This method is called to handle the NOTICE command from the Twitch
+         * server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandNotice(Message&& message) {
+            if (
+                (message.parameters.size() < 2)
+                && (message.parameters[0].length() < 1)
+            ) {
+                return;
+            }
+            const auto& noticeText = message.parameters[1];
+            user->Notice(noticeText);
+            if (
+                !loggedIn
+                && (noticeText == "Login unsuccessful")
+            ) {
+                user->LogOut();
+                static const ActionProcessors loginFailActionProcessors = {
+                    {Action::Type::AwaitMotd, &Impl::DiscardAction},
+                };
+                ProcessMessageWithAwaitingActions(
+                    message,
+                    loginFailActionProcessors
+                );
+            }
         }
 
         /**

@@ -145,6 +145,16 @@ namespace Twitch {
              */
             virtual void Whisper(WhisperInfo&& whisperInfo) {
             }
+
+            /**
+             * This is called whenever the user receives a notice from the
+             * server.
+             *
+             * @param[in] message
+             *     This is the text of the server notice message.
+             */
+            virtual void Notice(const std::string& message) {
+            }
         };
 
         // Lifecycle management
