@@ -275,6 +275,7 @@ namespace {
         std::vector< JoinInfo > joins;
         std::vector< PartInfo > parts;
         std::vector< Twitch::Messaging::MessageInfo > messages;
+        std::vector< Twitch::Messaging::WhisperInfo > whispers;
         std::condition_variable wakeCondition;
         std::mutex mutex;
 
@@ -327,6 +328,15 @@ namespace {
             );
         }
 
+        bool AwaitWhispers(size_t numWhispers) {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this, numWhispers]{ return whispers.size() == numWhispers; }
+            );
+        }
+
         // Twitch::Messaging::User
 
         virtual void LogIn() override {
@@ -370,6 +380,14 @@ namespace {
         ) override {
             std::lock_guard< std::mutex > lock(mutex);
             messages.push_back(std::move(messageInfo));
+            wakeCondition.notify_one();
+        }
+
+        virtual void Whisper(
+            Twitch::Messaging::WhisperInfo&& whisperInfo
+        ) override {
+            std::lock_guard< std::mutex > lock(mutex);
+            whispers.push_back(std::move(whisperInfo));
             wakeCondition.notify_one();
         }
 
@@ -897,4 +915,32 @@ TEST_F(MessagingTests, CommandCapabilityNotRequestedWhenNotSupported) {
         mockServer->GetLinesReceived()
     );
     EXPECT_FALSE(mockServer->IsDisconnected());
+}
+
+TEST_F(MessagingTests, ReceiveWhisper) {
+    // Just log in.
+    // There's no need to join any channel in order to send/receive whispers.
+    LogIn();
+
+    // Have the pretend Twitch server simulate someone else sending us a
+    // whisper.
+    mockServer->ReturnToClient(
+        ":foobar1126!foobar1126@foobar1126.tmi.twitch.tv WHISPER foobar1124 :Hello, World!" + CRLF
+    );
+
+    // Wait for the message to be received.
+    ASSERT_TRUE(user->AwaitWhispers(1));
+    ASSERT_EQ(1, user->whispers.size());
+    EXPECT_EQ("foobar1126", user->whispers[0].user);
+    EXPECT_EQ("Hello, World!", user->whispers[0].message);
+}
+
+TEST_F(MessagingTests, SendWhisper) {
+    // Just log in.
+    // There's no need to join any channel in order to send/receive whispers.
+    LogIn();
+
+    // Send a message to the channel we just joined.
+    tmi.SendWhisper("foobar1126", "Hello, World!");
+    EXPECT_TRUE(mockServer->AwaitLineReceived("PRIVMSG #jtv :.w foobar1126 Hello, World!"));
 }

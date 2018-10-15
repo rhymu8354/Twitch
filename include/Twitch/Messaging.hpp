@@ -55,6 +55,21 @@ namespace Twitch {
         };
 
         /**
+         * This contains all the information about a whisper received.
+         */
+        struct WhisperInfo {
+            /**
+             * This is the user who sent the message.
+             */
+            std::string user;
+
+            /**
+             * This is the content of the message.
+             */
+            std::string message;
+        };
+
+        /**
          * This is a base class and interface to be implemented by the user of
          * this class, in order to receive notifications, events, and other
          * callbacks from the class.
@@ -123,6 +138,17 @@ namespace Twitch {
             ) {
             }
 
+            /**
+             * This is called whenever the user receives a whisper.
+             *
+             * @param[in] whisperInfo
+             *     This contains all the information about the received
+             *     whisper.
+             */
+            virtual void Whisper(
+                WhisperInfo&& whisperInfo
+            ) {
+            }
         };
 
         // Lifecycle management
@@ -244,6 +270,20 @@ namespace Twitch {
          */
         void SendMessage(
             const std::string& channel,
+            const std::string& message
+        );
+
+        /**
+         * This method sends a whsper to another Twitch user.
+         *
+         * @param[in] nickname
+         *     This is the nickname of the other Twitch user to whisper.
+         *
+         * @param[in] message
+         *     This is the content of the whisper to send.
+         */
+        void SendWhisper(
+            const std::string& nickname,
             const std::string& message
         );
 

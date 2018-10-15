@@ -112,6 +112,11 @@ namespace {
              * Send a message to a channel.
              */
             SendMessage,
+
+            /**
+             * Send a whisper to a channel.
+             */
+            SendWhisper,
         };
 
         // Properties
@@ -145,6 +150,23 @@ namespace {
          */
         double expiration = 0.0;
     };
+
+    /**
+     * This method returns the nickname portion of a message prefix.
+     *
+     * @param[in] prefix
+     *     This is the message prefix from which to extract the nickname.
+     *
+     * @return
+     *     The nickname portion of the prefix is returned.
+     */
+    std::string ExtractNicknameFromPrefix(const std::string& prefix) {
+        const auto nicknameDelimiter = prefix.find('!');
+        if (nicknameDelimiter == std::string::npos) {
+            return "";
+        }
+        return prefix.substr(0, nicknameDelimiter);
+    }
 
 }
 
@@ -527,6 +549,7 @@ namespace Twitch {
                 {Action::Type::Join, &Impl::PerformActionJoin},
                 {Action::Type::Leave, &Impl::PerformActionLeave},
                 {Action::Type::SendMessage, &Impl::PerformActionSendMessage},
+                {Action::Type::SendWhisper, &Impl::PerformActionSendWhisper},
             };
             const auto actionPerformer = actionPerformers.find(action.type);
             if (actionPerformer != actionPerformers.end()) {
@@ -744,6 +767,7 @@ namespace Twitch {
                 {"PART", &Impl::HandleServerCommandPart},
                 {"PRIVMSG", &Impl::HandleServerCommandPrivMsg},
                 {"CAP", &Impl::HandleServerCommandCap},
+                {"WHISPER", &Impl::HandleServerCommandWhisper},
             };
             dataReceived += action.message;
             Message message;
@@ -849,12 +873,9 @@ namespace Twitch {
             ) {
                 return;
             }
-            const auto nicknameDelimiter = message.prefix.find('!');
-            if (nicknameDelimiter == std::string::npos) {
-                return;
-            }
+            const auto nickname = ExtractNicknameFromPrefix(message.prefix);
             MessageInfo messageInfo;
-            messageInfo.user = message.prefix.substr(0, nicknameDelimiter);
+            messageInfo.user = nickname;
             messageInfo.channel = message.parameters[0].substr(1);
             messageInfo.message = message.parameters[1];
             user->Message(std::move(messageInfo));
@@ -876,6 +897,27 @@ namespace Twitch {
                 message,
                 capActionProcessors
             );
+        }
+
+        /**
+         * This method is called to handle the WHISPER command from the Twitch
+         * server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandWhisper(Message&& message) {
+            if (
+                (message.parameters.size() < 2)
+                && (message.parameters[0].length() < 1)
+            ) {
+                return;
+            }
+            const auto nickname = ExtractNicknameFromPrefix(message.prefix);
+            WhisperInfo whisperInfo;
+            whisperInfo.user = nickname;
+            whisperInfo.message = message.parameters[1];
+            user->Whisper(std::move(whisperInfo));
         }
 
         /**
@@ -925,6 +967,19 @@ namespace Twitch {
                 return;
             }
             SendLineToTwitchServer(*connection, "PRIVMSG #" + action.nickname + " :" + action.message);
+        }
+
+        /**
+         * This method performs the given SendWhisper action.
+         *
+         * @param[in] action
+         *     This is the action to perform.
+         */
+        void PerformActionSendWhisper(Action&& action) {
+            if (connection == nullptr) {
+                return;
+            }
+            SendLineToTwitchServer(*connection, "PRIVMSG #jtv :.w " + action.nickname + " " + action.message);
         }
 
         /**
@@ -1050,6 +1105,17 @@ namespace Twitch {
         Action action;
         action.type = Action::Type::SendMessage;
         action.nickname = channel;
+        action.message = message;
+        impl_->PostAction(std::move(action));
+    }
+
+    void Messaging::SendWhisper(
+        const std::string& nickname,
+        const std::string& message
+    ) {
+        Action action;
+        action.type = Action::Type::SendWhisper;
+        action.nickname = nickname;
         action.message = message;
         impl_->PostAction(std::move(action));
     }
