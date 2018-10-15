@@ -39,23 +39,6 @@ namespace {
     constexpr double LOG_IN_TIMEOUT_SECONDS = 5.0;
 
     /**
-     * These are the states in which the Messaging class can be.
-     */
-    enum class State {
-        /**
-         * The client has either not yet logged in, or has logged out.
-         * There is no active connection.
-         */
-        NotLoggedIn,
-
-        /**
-         * The client has completely logged into the server,
-         * with an active connection.
-         */
-        LoggedIn,
-    };
-
-    /**
      * This is used to convey an action for the Messaging class worker
      * to either perform or await, including any necessary context.
      */
@@ -315,9 +298,6 @@ namespace Twitch {
         // This holds onto any actions for which the worker is awaiting a
         // response from the server.
         std::list< Action > actionsAwaitingResponses;
-
-        // This keeps track of the current state of the connection.
-        State state = State::NotLoggedIn;
 
         // These are the IRCv3 capabilities advertised by the server.
         std::set< std::string > capsSupported;
@@ -729,7 +709,6 @@ namespace Twitch {
                 loggedIn = true;
                 user->LogIn();
             }
-            state = State::LoggedIn;
             return true;
         }
 
