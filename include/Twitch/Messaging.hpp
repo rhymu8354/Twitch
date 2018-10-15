@@ -133,9 +133,7 @@ namespace Twitch {
              *     This contains all the information about the received
              *     message.
              */
-            virtual void Message(
-                MessageInfo&& messageInfo
-            ) {
+            virtual void Message(MessageInfo&& messageInfo) {
             }
 
             /**
@@ -145,9 +143,7 @@ namespace Twitch {
              *     This contains all the information about the received
              *     whisper.
              */
-            virtual void Whisper(
-                WhisperInfo&& whisperInfo
-            ) {
+            virtual void Whisper(WhisperInfo&& whisperInfo) {
             }
         };
 
