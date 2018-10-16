@@ -224,6 +224,11 @@ namespace Twitch {
                 ClearAll,
 
                 /**
+                 * Remove/delete individual message from chat.
+                 */
+                ClearMessage,
+
+                /**
                  * A user has been "timed out", meaning they aren't allowed to
                  * chat for some fixed amount of time.
                  */
@@ -242,6 +247,8 @@ namespace Twitch {
 
             /**
              * This is the ID of the channel whose mode changed.
+             *
+             * NOTE: not available for ClearMessage type.
              */
             int channelId;
 
@@ -268,6 +275,20 @@ namespace Twitch {
             std::string reason;
 
             /**
+             * This is the ID the message that was deleted.
+             *
+             * NOTE: only applies for ClearMessage type.
+             */
+            std::string offendingMessageId;
+
+            /**
+             * This is a copy of the message that was deleted.
+             *
+             * NOTE: only applies for ClearMessage type.
+             */
+            std::string offendingMessageContent;
+
+            /**
              * This is the number of seconds for which the user has been timed
              * out.
              *
@@ -278,6 +299,8 @@ namespace Twitch {
             /**
              * This is the time, as expressed in seconds past the UNIX epoch (1
              * January 1970, Midnight, UTC).
+             *
+             * NOTE: only applies for types ClearAll, Timeout, and Ban.
              */
             time_t timestamp = 0;
         };

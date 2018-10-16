@@ -1396,3 +1396,25 @@ TEST_F(MessagingTests, ClearAll) {
     EXPECT_EQ("foobar1125", user->clears[0].channelName);
     EXPECT_EQ(1539652354185, user->clears[0].timestamp);
 }
+
+TEST_F(MessagingTests, ClearMessage) {
+    // Log in and join a channel.
+    LogIn();
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate the condition where a moderator
+    // has deleted an individual message.
+    mockServer->ReturnToClient(
+        "@login=foobar1126;target-msg-id=11223344-5566-7788-1122-112233445566 "
+        ":tmi.twitch.tv CLEARMSG #foobar1125 :Don't ban me, bro!" + CRLF
+    );
+
+    // Wait to be notified about the clear.
+    ASSERT_TRUE(user->AwaitClears(1));
+    ASSERT_EQ(1, user->clears.size());
+    EXPECT_EQ(Twitch::Messaging::ClearInfo::Type::ClearMessage, user->clears[0].type);
+    EXPECT_EQ("foobar1125", user->clears[0].channelName);
+    EXPECT_EQ("foobar1126", user->clears[0].userName);
+    EXPECT_EQ("Don't ban me, bro!", user->clears[0].offendingMessageContent);
+    EXPECT_EQ("11223344-5566-7788-1122-112233445566", user->clears[0].offendingMessageId);
+}

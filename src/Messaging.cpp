@@ -811,6 +811,7 @@ namespace Twitch {
                 {"HOSTTARGET", &Impl::HandleServerCommandHostTarget},
                 {"ROOMSTATE", &Impl::HandleServerCommandRoomState},
                 {"CLEARCHAT", &Impl::HandleServerCommandClearChat},
+                {"CLEARMSG", &Impl::HandleServerCommandClearMessage},
             };
             dataReceived += action.message;
             Message message;
@@ -1141,6 +1142,48 @@ namespace Twitch {
                     }
                 }
             }
+
+            // Trigger callback to the user.
+            user->Clear(std::move(clear));
+        }
+
+        /**
+         * This method is called to handle the CLEARMSG command from the
+         * Twitch server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandClearMessage(Message&& message) {
+            // Ignore message unless it at least has a channel name.
+            if (
+                (message.parameters.size() < 2)
+                && (message.parameters[0].length() < 2)
+            ) {
+                return;
+            }
+
+            // Parse channel name.
+            ClearInfo clear;
+            clear.type = ClearInfo::Type::ClearMessage;
+            clear.channelName = message.parameters[0].substr(1);
+
+            // Extract offending message content.
+            clear.offendingMessageContent = message.parameters[1];
+
+            // Extract offending message ID.
+            const auto& offendingMessageIdTag = message.tags.allTags.find("target-msg-id");
+            if (offendingMessageIdTag != message.tags.allTags.end()) {
+                clear.offendingMessageId = offendingMessageIdTag->second;
+            }
+
+            // Extract user name.
+            const auto& userNameTag = message.tags.allTags.find("login");
+            if (userNameTag != message.tags.allTags.end()) {
+                clear.userName = userNameTag->second;
+            }
+
+            // Trigger callback to the user.
             user->Clear(std::move(clear));
         }
 
