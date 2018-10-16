@@ -329,6 +329,36 @@ namespace Twitch {
         };
 
         /**
+         * This contains all the information about a user's global or
+         * channel-specific status notification.
+         */
+        struct UserStateInfo {
+            /**
+             * This flag indicates whether or not the user state applies to
+             * them globally, rather than to just one channel.
+             */
+            bool global = false;
+
+            /**
+             * This is the channel for which the state is applicable, if this
+             * isn't a global state information notification.
+             */
+            std::string channel;
+
+            /**
+             * This is the ID of the user whose state was announced.
+             *
+             * NOTE: This is only provided for the global state notification.
+             */
+            int userId;
+
+            /**
+             * This contains information provided in the message's tags.
+             */
+            TagsInfo tags;
+        };
+
+        /**
          * This is a base class and interface to be implemented by the user of
          * this class, in order to receive notifications, events, and other
          * callbacks from the class.
@@ -448,6 +478,17 @@ namespace Twitch {
              *     mod notification.
              */
             virtual void Mod(ModInfo&& modInfo) {
+            }
+
+            /**
+             * This is called whenever the server provides the user with their
+             * state, either globally, or within the context of a channel.
+             *
+             * @param[in] userStateInfo
+             *     This contains all the information about the received
+             *     user state notification.
+             */
+            virtual void UserState(UserStateInfo&& userStateInfo) {
             }
         };
 

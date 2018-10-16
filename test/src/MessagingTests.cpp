@@ -257,6 +257,7 @@ namespace {
         std::vector< Twitch::Messaging::RoomModeChangeInfo > roomModeChanges;
         std::vector< Twitch::Messaging::ClearInfo > clears;
         std::vector< Twitch::Messaging::ModInfo > mods;
+        std::vector< Twitch::Messaging::UserStateInfo > userStates;
         std::condition_variable wakeCondition;
         std::mutex mutex;
 
@@ -361,6 +362,15 @@ namespace {
             );
         }
 
+        bool AwaitUserState(size_t numUserStates) {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this, numUserStates]{ return userStates.size() == numUserStates; }
+            );
+        }
+
         // Twitch::Messaging::User
 
         virtual void LogIn() override {
@@ -444,6 +454,14 @@ namespace {
         ) override {
             std::lock_guard< std::mutex > lock(mutex);
             mods.push_back(std::move(modInfo));
+            wakeCondition.notify_one();
+        }
+
+        virtual void UserState(
+            Twitch::Messaging::UserStateInfo&& userStateInfo
+        ) override {
+            std::lock_guard< std::mutex > lock(mutex);
+            userStates.push_back(std::move(userStateInfo));
             wakeCondition.notify_one();
         }
 
@@ -1473,4 +1491,54 @@ TEST_F(MessagingTests, UserUnmodded) {
     EXPECT_FALSE(user->mods[0].mod);
     EXPECT_EQ("foobar1125", user->mods[0].channel);
     EXPECT_EQ("foobar1126", user->mods[0].user);
+}
+
+TEST_F(MessagingTests, GlobalUserState) {
+    // Log in.  No need to join a channel, because this state applies to you
+    // globally.
+    LogIn();
+
+    // Have the pretend Twitch server send the user their global state.
+    mockServer->ReturnToClient(
+        "@badges=;color=;display-name=FooBar1124;emote-sets=0;user-id=12345;user-type= "
+        ":tmi.twitch.tv GLOBALUSERSTATE" + CRLF
+    );
+
+    // Wait to be notified about the state event.
+    ASSERT_TRUE(user->AwaitUserState(1));
+    ASSERT_EQ(1, user->userStates.size());
+    EXPECT_TRUE(user->userStates[0].global);
+    EXPECT_EQ(12345, user->userStates[0].userId);
+    EXPECT_EQ("FooBar1124", user->userStates[0].tags.displayName);
+    EXPECT_EQ(
+        (std::set< std::string >{
+        }),
+        user->userStates[0].tags.badges
+    );
+    EXPECT_EQ(0xFFFFFF, user->userStates[0].tags.color);
+}
+
+TEST_F(MessagingTests, ChannelUserState) {
+    // Log in and join a channel.
+    LogIn();
+    Join("foobar1125");
+
+    // Have the pretend Twitch server send the user their channel-specific
+    // state.
+    mockServer->ReturnToClient(
+        "@badges=;color=;display-name=FooBar1124;emote-sets=0;mod=0;subscriber=0;user-type= "
+        ":tmi.twitch.tv USERSTATE #foobar1124" + CRLF
+    );
+
+    // Wait to be notified about the state event.
+    ASSERT_TRUE(user->AwaitUserState(1));
+    ASSERT_EQ(1, user->userStates.size());
+    EXPECT_FALSE(user->userStates[0].global);
+    EXPECT_EQ("FooBar1124", user->userStates[0].tags.displayName);
+    EXPECT_EQ(
+        (std::set< std::string >{
+        }),
+        user->userStates[0].tags.badges
+    );
+    EXPECT_EQ(0xFFFFFF, user->userStates[0].tags.color);
 }

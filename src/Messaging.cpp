@@ -813,6 +813,8 @@ namespace Twitch {
                 {"CLEARCHAT", &Impl::HandleServerCommandClearChat},
                 {"CLEARMSG", &Impl::HandleServerCommandClearMessage},
                 {"MODE", &Impl::HandleServerCommandMode},
+                {"GLOBALUSERSTATE", &Impl::HandleServerCommandGlobalUserState},
+                {"USERSTATE", &Impl::HandleServerCommandUserState},
             };
             dataReceived += action.message;
             Message message;
@@ -1223,6 +1225,64 @@ namespace Twitch {
 
             // Trigger callback to the user.
             user->Mod(std::move(mod));
+        }
+
+        /**
+         * This method is called to handle the GLOBALUSERSTATE command from the
+         * Twitch server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandGlobalUserState(Message&& message) {
+            // Start off by saying this isn't a global state for the user.
+            UserStateInfo userState;
+            userState.global = true;
+
+            // Copy tags.
+            userState.tags = message.tags;
+
+            // Parse user ID.
+            const auto& userIdTag = message.tags.allTags.find("user-id");
+            if (
+                (userIdTag == message.tags.allTags.end())
+                || (sscanf(userIdTag->second.c_str(), "%d", &userState.userId) != 1)
+            ) {
+                userState.userId = 0;
+            }
+
+            // Trigger user callback.
+            user->UserState(std::move(userState));
+        }
+
+        /**
+         * This method is called to handle the USERSTATE command from the
+         * Twitch server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandUserState(Message&& message) {
+            // Ignore message unless it at least has a channel name.
+            if (
+                (message.parameters.size() < 1)
+                || (message.parameters[0].length() < 2)
+            ) {
+                return;
+            }
+
+            // Start off by saying this isn't a global state for the user.
+            UserStateInfo userState;
+            userState.global = false;
+
+            // Parse channel name.
+            userState.channel = message.parameters[0].substr(1);
+
+            // Copy tags.
+            userState.tags = message.tags;
+
+            // Trigger user callback.
+            user->UserState(std::move(userState));
         }
 
         /**
