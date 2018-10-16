@@ -815,6 +815,7 @@ namespace Twitch {
                 {"MODE", &Impl::HandleServerCommandMode},
                 {"GLOBALUSERSTATE", &Impl::HandleServerCommandGlobalUserState},
                 {"USERSTATE", &Impl::HandleServerCommandUserState},
+                {"RECONNECT", &Impl::HandleServerCommandReconnect},
             };
             dataReceived += action.message;
             Message message;
@@ -1283,6 +1284,17 @@ namespace Twitch {
 
             // Trigger user callback.
             user->UserState(std::move(userState));
+        }
+
+        /**
+         * This method is called to handle the RECONNECT command from the
+         * Twitch server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandReconnect(Message&& message) {
+            user->Doom();
         }
 
         /**

@@ -248,6 +248,7 @@ namespace {
 
         bool loggedIn = false;
         bool loggedOut = false;
+        bool doom = false;
         std::vector< Twitch::Messaging::MembershipInfo > joins;
         std::vector< Twitch::Messaging::MembershipInfo > parts;
         std::vector< Twitch::Messaging::MessageInfo > messages;
@@ -371,7 +372,22 @@ namespace {
             );
         }
 
+        bool AwaitDoom() {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this]{ return doom; }
+            );
+        }
+
         // Twitch::Messaging::User
+
+        virtual void Doom() override {
+            std::lock_guard< std::mutex > lock(mutex);
+            doom = true;
+            wakeCondition.notify_one();
+        }
 
         virtual void LogIn() override {
             std::lock_guard< std::mutex > lock(mutex);
@@ -1541,4 +1557,19 @@ TEST_F(MessagingTests, ChannelUserState) {
         user->userStates[0].tags.badges
     );
     EXPECT_EQ(0xFFFFFF, user->userStates[0].tags.color);
+}
+
+TEST_F(MessagingTests, Reconnect) {
+    // Log into chat.  We (probably?) don't need to be in any chat room in
+    // order to get told about the server's imminent doom!
+    LogIn();
+
+    // Have the pretend Twitch server send the user a reconnection
+    // notification.
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv RECONNECT" + CRLF
+    );
+
+    // Wait to be notified about the doom event.
+    ASSERT_TRUE(user->AwaitDoom());
 }

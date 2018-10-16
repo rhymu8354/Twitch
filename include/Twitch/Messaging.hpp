@@ -370,6 +370,15 @@ namespace Twitch {
         class User {
         public:
             /**
+             * This is called to notify the user that the Twitch server is
+             * about to go down, and the user should expect a disconnection,
+             * and might want to try reconnecting again after a short period of
+             * time.
+             */
+            virtual void Doom() {
+            }
+
+            /**
              * This is called to notify the user when the user agent has
              * successfully logged into the Twitch server.
              */
