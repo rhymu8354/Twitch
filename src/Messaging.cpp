@@ -13,10 +13,12 @@
 #include <chrono>
 #include <condition_variable>
 #include <deque>
+#include <inttypes.h>
 #include <list>
 #include <map>
 #include <mutex>
 #include <set>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string>
 #include <SystemAbstractions/StringExtensions.hpp>
@@ -140,6 +142,38 @@ namespace {
          */
         double expiration = 0.0;
     };
+
+    /**
+     * This function replaces all instances of "\\s" (single slash followed by
+     * 's' character) with single spaces.
+     *
+     * @note
+     *     This really needs to be made generic and moved to the
+     *     SystemAbstractions StringExtensions module.
+     *
+     * @param[in] s
+     *     This is the string which may have spaces to unescape.
+     *
+     * @return
+     *     The given string, with any escaped spaces unescaped, is returned.
+     */
+    std::string UnescapeSpaces(const std::string& s) {
+        std::string output;
+        bool escape = false;
+        for (size_t i = 0; i < s.length(); ++i) {
+            if (escape) {
+                if (s[i] == 's') {
+                    output += ' ';
+                }
+                escape = false;
+            } else if (s[i] == '\\') {
+                escape = true;
+            } else {
+                output += s[i];
+            }
+        }
+        return output;
+    }
 
     /**
      * This method returns the nickname portion of a message prefix.
@@ -774,6 +808,9 @@ namespace Twitch {
                 {"CAP", &Impl::HandleServerCommandCap},
                 {"WHISPER", &Impl::HandleServerCommandWhisper},
                 {"NOTICE", &Impl::HandleServerCommandNotice},
+                {"HOSTTARGET", &Impl::HandleServerCommandHostTarget},
+                {"ROOMSTATE", &Impl::HandleServerCommandRoomState},
+                {"CLEARCHAT", &Impl::HandleServerCommandClearChat},
             };
             dataReceived += action.message;
             Message message;
@@ -958,6 +995,153 @@ namespace Twitch {
                     loginFailActionProcessors
                 );
             }
+        }
+
+        /**
+         * This method is called to handle the HOSTTARGET command from the
+         * Twitch server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandHostTarget(Message&& message) {
+            if (
+                (message.parameters.size() < 2)
+                && (message.parameters[0].length() < 2)
+            ) {
+                return;
+            }
+            HostInfo hostInfo;
+            hostInfo.hosting = message.parameters[0].substr(1);
+            const auto secondParameterParts = SystemAbstractions::Split(message.parameters[1], ' ');
+            if (secondParameterParts[0] == "-") {
+                hostInfo.on = false;
+            } else {
+                hostInfo.on = true;
+                hostInfo.beingHosted = secondParameterParts[0];
+            }
+            if (
+                sscanf(
+                    secondParameterParts[1].c_str(),
+                    "%zu",
+                    &hostInfo.viewers
+                ) != 1
+            ) {
+                hostInfo.viewers = 0;
+            }
+            user->Host(std::move(hostInfo));
+        }
+
+        /**
+         * This method is called to handle the ROOMSTATE command from the
+         * Twitch server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandRoomState(Message&& message) {
+            if (
+                (message.parameters.size() < 1)
+                && (message.parameters[0].length() < 2)
+            ) {
+                return;
+            }
+            for (const std::string& mode: { "slow", "followers-only", "r9k", "emote-only", "subs-only" }) {
+                const auto& modeTag = message.tags.allTags.find(mode);
+                if (modeTag != message.tags.allTags.end()) {
+                    RoomModeChangeInfo roomModeChange;
+                    roomModeChange.channelName = message.parameters[0].substr(1);
+                    const auto roomIdTag = message.tags.allTags.find("room-id");
+                    if (roomIdTag != message.tags.allTags.end()) {
+                        if (sscanf(roomIdTag->second.c_str(), "%d", &roomModeChange.channelId) != 1) {
+                            roomModeChange.channelId = 0;
+                        }
+                    }
+                    roomModeChange.mode = mode;
+                    if (sscanf(modeTag->second.c_str(), "%d", &roomModeChange.parameter) != 1) {
+                        roomModeChange.parameter = 0;
+                    }
+                    user->RoomModeChange(std::move(roomModeChange));
+                }
+            }
+        }
+
+        /**
+         * This method is called to handle the CLEARCHAT command from the
+         * Twitch server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandClearChat(Message&& message) {
+            // Ignore message unless it at least has a channel name.
+            if (
+                (message.parameters.size() < 1)
+                && (message.parameters[0].length() < 2)
+            ) {
+                return;
+            }
+
+            // Parse channel name and ID.
+            ClearInfo clear;
+            clear.channelName = message.parameters[0].substr(1);
+            const auto roomIdTag = message.tags.allTags.find("room-id");
+            if (roomIdTag != message.tags.allTags.end()) {
+                if (sscanf(roomIdTag->second.c_str(), "%d", &clear.channelId) != 1) {
+                    clear.channelId = 0;
+                }
+            }
+
+            // Parse timestamp.
+            uintmax_t timeAsInt;
+            const auto timestampTag = message.tags.allTags.find("tmi-sent-ts");
+            if (
+                (timestampTag != message.tags.allTags.end())
+                && (sscanf(timestampTag->second.c_str(), "%" SCNuMAX, &timeAsInt) == 1)
+            ) {
+                clear.timestamp = (decltype(clear.timestamp))timeAsInt;
+            } else {
+                clear.timestamp = 0;
+            }
+
+            // Interpret as clear-all or timeout/ban based on whether or not
+            // there is an additional parameter (the target name).
+            if (message.parameters.size() == 1) {
+                clear.type = ClearInfo::Type::ClearAll;
+            } else {
+                // Extract user name.
+                clear.userName = message.parameters[1];
+
+                // Parse user ID.
+                const auto& userIdTag = message.tags.allTags.find("target-user-id");
+                if (
+                    (userIdTag == message.tags.allTags.end())
+                    || (sscanf(userIdTag->second.c_str(), "%d", &clear.userId) != 1)
+                ) {
+                    clear.userId = 0;
+                }
+
+                // Extract ban/timeout reason, if any.
+                const auto& reasonTag = message.tags.allTags.find("ban-reason");
+                if (reasonTag != message.tags.allTags.end()) {
+                    clear.reason = UnescapeSpaces(reasonTag->second);
+                }
+
+                // Check for ban duration; if none, it's a permanent ban,
+                // rather than just a timeout.
+                const auto& banDurationTag = message.tags.allTags.find("ban-duration");
+                if (banDurationTag == message.tags.allTags.end()) {
+                    clear.type = ClearInfo::Type::Ban;
+                } else {
+                    clear.type = ClearInfo::Type::Timeout;
+
+                    // Parse timeout duration.
+                    if (sscanf(banDurationTag->second.c_str(), "%zu", &clear.duration) != 1) {
+                        clear.duration = 0;
+                    }
+                }
+            }
+            user->Clear(std::move(clear));
         }
 
         /**

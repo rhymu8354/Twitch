@@ -74,6 +74,13 @@ namespace Twitch {
              * and bits 7-0 correspond to the blue channel).
              */
             uint32_t color = 0xFFFFFF;
+
+            /**
+             * This holds a copy of the names and values of all the tags,
+             * including both the ones known about by the parser (above) as
+             * well as those not known.
+             */
+            std::map< std::string, std::string > allTags;
         };
 
         /**
@@ -131,6 +138,148 @@ namespace Twitch {
              * This is the user whose membership to the channel changed.
              */
             std::string user;
+        };
+
+        /**
+         * This contains all the information about a hosting change.
+         */
+        struct HostInfo {
+            /**
+             * This is a flag which indicates whether or not hosting mode has
+             * been turned on.
+             */
+            bool on = false;
+
+            /**
+             * This is the name of the channel that is doing the hosting.
+             */
+            std::string hosting;
+
+            /**
+             * This is the name of the channel being hosted, if hosting mode
+             * has been turned on.
+             */
+            std::string beingHosted;
+
+            /**
+             * This is the number of viewers currently in the channel being
+             * hosted.
+             */
+            size_t viewers;
+        };
+
+        /**
+         * This contains all the information about a room mode change.
+         */
+        struct RoomModeChangeInfo {
+            /**
+             * This is the mode which changed.
+             * - slow: limit on how often users in the chat room are allowed to
+             *   send messages
+             * - followers-only: restrict chat to all or some of your
+             *   followers, based on how long they’ve followed
+             * - r9k: disallows users from posting non-unique messages to the
+             *   channel
+             * - emote-only: only messages that are 100% emotes are allowed
+             * - subs-only: only users subscribed to you can talk in the chat
+             *   room
+             */
+            std::string mode;
+
+            /**
+             * This is the parameter accompanying the mode change.  The meaning
+             * of the parameter depends on the mode.
+             * - slow: number of seconds, or 0 if off
+             * - followers-only: number of minutes a follower will need to have
+             *   been following in order to be able to chat, or -1 if off
+             * - r9k: 1 if on, 0 if off
+             * - emote-only: 1 if on, 0 if off
+             * - subs-only: 1 if on, 0 if off
+             */
+            int parameter;
+
+            /**
+             * This is the channel whose membership changed.
+             */
+            std::string channelName;
+
+            /**
+             * This is the ID of the channel whose mode changed.
+             */
+            int channelId;
+        };
+
+        /**
+         * This contains all the information about a ban, timeout, our chat
+         * clear.
+         */
+        struct ClearInfo {
+            /**
+             * This identifies what kind of clear was done.
+             */
+            enum class Type {
+                /**
+                 * Clear all messages from chat.
+                 */
+                ClearAll,
+
+                /**
+                 * A user has been "timed out", meaning they aren't allowed to
+                 * chat for some fixed amount of time.
+                 */
+                Timeout,
+
+                /**
+                 * A user has been permanently banned from the channel.
+                 */
+                Ban,
+            } type = Type::ClearAll;
+
+            /**
+             * This is the channel whose membership changed.
+             */
+            std::string channelName;
+
+            /**
+             * This is the ID of the channel whose mode changed.
+             */
+            int channelId;
+
+            /**
+             * This is the name of the user who was timed out or banned.
+             *
+             * NOTE: only applies for types Timeout and Ban.
+             */
+            std::string userName;
+
+            /**
+             * This is the ID of the user who was timed out or banned.
+             *
+             * NOTE: only applies for types Timeout and Ban.
+             */
+            int userId;
+
+            /**
+             * This is a human-readable string meant to convey an explanation
+             * of why the user was timed out or banned.
+             *
+             * NOTE: only applies for types Timeout and Ban.
+             */
+            std::string reason;
+
+            /**
+             * This is the number of seconds for which the user has been timed
+             * out.
+             *
+             * NOTE: only applies for types Timeout.
+             */
+            size_t duration = 0;
+
+            /**
+             * This is the time, as expressed in seconds past the UNIX epoch (1
+             * January 1970, Midnight, UTC).
+             */
+            time_t timestamp = 0;
         };
 
         /**
@@ -208,6 +357,40 @@ namespace Twitch {
              *     This is the text of the server notice message.
              */
             virtual void Notice(const std::string& message) {
+            }
+
+            /**
+             * This is called whenever a hosting notification is received from
+             * the server.
+             *
+             * @param[in] hostInfo
+             *     This contains all the information about the received
+             *     hosting notification.
+             */
+            virtual void Host(HostInfo&& hostInfo) {
+            }
+
+            /**
+             * This is called whenever a notification about a room mode being
+             * changed is received from the server.
+             *
+             * @param[in] roomModeChangeInfo
+             *     This contains all the information about the received
+             *     room mode change notification.
+             */
+            virtual void RoomModeChange(RoomModeChangeInfo&& roomModeChangeInfo) {
+            }
+
+            /**
+             * This is called whenever a notification about chat being cleared,
+             * a user being banned, or a user being timed out is received from
+             * the server.
+             *
+             * @param[in] clearInfo
+             *     This contains all the information about the received
+             *     clear notification.
+             */
+            virtual void Clear(ClearInfo&& clearInfo) {
             }
         };
 

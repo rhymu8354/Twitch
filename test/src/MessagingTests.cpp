@@ -253,6 +253,9 @@ namespace {
         std::vector< Twitch::Messaging::MessageInfo > messages;
         std::vector< Twitch::Messaging::WhisperInfo > whispers;
         std::vector< std::string > notices;
+        std::vector< Twitch::Messaging::HostInfo > hosts;
+        std::vector< Twitch::Messaging::RoomModeChangeInfo > roomModeChanges;
+        std::vector< Twitch::Messaging::ClearInfo > clears;
         std::condition_variable wakeCondition;
         std::mutex mutex;
 
@@ -321,6 +324,33 @@ namespace {
             );
         }
 
+        bool AwaitHosts(size_t numHosts) {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this, numHosts]{ return hosts.size() == numHosts; }
+            );
+        }
+
+        bool AwaitRoomModeChanges(size_t numRoomModeChanges) {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this, numRoomModeChanges]{ return roomModeChanges.size() == numRoomModeChanges; }
+            );
+        }
+
+        bool AwaitClears(size_t numClears) {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this, numClears]{ return clears.size() == numClears; }
+            );
+        }
+
         // Twitch::Messaging::User
 
         virtual void LogIn() override {
@@ -372,6 +402,30 @@ namespace {
         ) override {
             std::lock_guard< std::mutex > lock(mutex);
             notices.push_back(message);
+            wakeCondition.notify_one();
+        }
+
+        virtual void Host(
+            Twitch::Messaging::HostInfo&& hostInfo
+        ) override {
+            std::lock_guard< std::mutex > lock(mutex);
+            hosts.push_back(std::move(hostInfo));
+            wakeCondition.notify_one();
+        }
+
+        virtual void RoomModeChange(
+            Twitch::Messaging::RoomModeChangeInfo&& roomModeChangeInfo
+        ) override {
+            std::lock_guard< std::mutex > lock(mutex);
+            roomModeChanges.push_back(std::move(roomModeChangeInfo));
+            wakeCondition.notify_one();
+        }
+
+        virtual void Clear(
+            Twitch::Messaging::ClearInfo&& clearInfo
+        ) override {
+            std::lock_guard< std::mutex > lock(mutex);
+            clears.push_back(std::move(clearInfo));
             wakeCondition.notify_one();
         }
 
@@ -466,7 +520,7 @@ struct MessagingTests
 
     // ::testing::Test
 
-    virtual void SetUp() {
+    virtual void SetUp() override {
         const auto connectionFactory = [this]() -> std::shared_ptr< Twitch::Connection > {
             if (connectionCreatedByUnitUnderTest) {
                 mockServer = std::make_shared< MockServer >();
@@ -479,7 +533,7 @@ struct MessagingTests
         tmi.SetUser(user);
     }
 
-    virtual void TearDown() {
+    virtual void TearDown() override {
     }
 };
 
@@ -1137,4 +1191,208 @@ TEST_F(MessagingTests, AnonymousConnection) {
         }),
         mockServer->GetLinesReceived()
     );
+}
+
+TEST_F(MessagingTests, ChannelStartsHostingSomeoneElse) {
+    // Log in and join a channel.
+    LogIn();
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate the condition where the channel
+    // begins hosting another channel.
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv HOSTTARGET #foobar1125 :foobar1126 42" + CRLF
+    );
+
+    // Wait to be notified about a hosting change.
+    ASSERT_TRUE(user->AwaitHosts(1));
+    ASSERT_EQ(1, user->hosts.size());
+    EXPECT_TRUE(user->hosts[0].on);
+    EXPECT_EQ("foobar1125", user->hosts[0].hosting);
+    EXPECT_EQ("foobar1126", user->hosts[0].beingHosted);
+    EXPECT_EQ(42, user->hosts[0].viewers);
+}
+
+TEST_F(MessagingTests, ChannelStopsHosting) {
+    // Log in and join a channel.
+    LogIn();
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate the condition where the channel
+    // begins hosting another channel.
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv HOSTTARGET #foobar1125 :- 0" + CRLF
+    );
+
+    // Wait to be notified about a hosting change.  NOTE: By not checking
+    // "beingHosted", we're saying here that "beingHosted" is irrelevant and
+    // there's no need to even look at it, because "on" was false (meaning host
+    // mode if off and nobody is being hosted).
+    ASSERT_TRUE(user->AwaitHosts(1));
+    ASSERT_EQ(1, user->hosts.size());
+    EXPECT_FALSE(user->hosts[0].on);
+    EXPECT_EQ("foobar1125", user->hosts[0].hosting);
+    EXPECT_EQ(0, user->hosts[0].viewers);
+}
+
+TEST_F(MessagingTests, RoomModes) {
+    // Log in and join a channel.
+    LogIn();
+    Join("foobar1125");
+
+    // Define the different mode change commands to try.
+    struct RoomModeTest {
+        std::string description;
+        std::string input;
+        std::string mode;
+        int parameter;
+    };
+    static const std::vector< RoomModeTest > roomModeTests{
+        {
+            "Slow mode on for 120 seconds",
+            "@room-id=12345;slow=120 :tmi.twitch.tv ROOMSTATE #foobar1125",
+            "slow",
+            120
+        },
+        {
+            "Slow mode off",
+            "@room-id=12345;slow=0 :tmi.twitch.tv ROOMSTATE #foobar1125",
+            "slow",
+            0
+        },
+        {
+            "Followers-only mode on for 30 minutes",
+            "@room-id=12345;followers-only=30 :tmi.twitch.tv ROOMSTATE #foobar1125",
+            "followers-only",
+            30
+        },
+        {
+            "Followers-only mode off",
+            "@room-id=12345;followers-only=-1 :tmi.twitch.tv ROOMSTATE #foobar1125",
+            "followers-only",
+            -1
+        },
+        {
+            "r9k mode on",
+            "@room-id=12345;r9k=1 :tmi.twitch.tv ROOMSTATE #foobar1125",
+            "r9k",
+            1
+        },
+        {
+            "r9k mode off",
+            "@room-id=12345;r9k=0 :tmi.twitch.tv ROOMSTATE #foobar1125",
+            "r9k",
+            0
+        },
+        {
+            "emote-only mode on",
+            "@room-id=12345;emote-only=1 :tmi.twitch.tv ROOMSTATE #foobar1125",
+            "emote-only",
+            1
+        },
+        {
+            "emote-only mode off",
+            "@room-id=12345;emote-only=0 :tmi.twitch.tv ROOMSTATE #foobar1125",
+            "emote-only",
+            0
+        },
+        {
+            "subs-only mode on",
+            "@room-id=12345;subs-only=1 :tmi.twitch.tv ROOMSTATE #foobar1125",
+            "subs-only",
+            1
+        },
+        {
+            "subs-only mode off",
+            "@room-id=12345;subs-only=0 :tmi.twitch.tv ROOMSTATE #foobar1125",
+            "subs-only",
+            0
+        },
+    };
+
+    size_t roomModeChanges = 0;
+    for (const auto& roomModeTest: roomModeTests) {
+        // Have the pretend Twitch server simulate the condition where the room
+        // mode changes.
+        mockServer->ReturnToClient(roomModeTest.input + CRLF);
+
+        // Wait to be notified about a room mode change.
+        ASSERT_TRUE(user->AwaitRoomModeChanges(roomModeChanges + 1)) << roomModeTest.description;
+        ASSERT_EQ(roomModeChanges + 1, user->roomModeChanges.size());
+        EXPECT_EQ(roomModeTest.mode, user->roomModeChanges[roomModeChanges].mode);
+        EXPECT_EQ(roomModeTest.parameter, user->roomModeChanges[roomModeChanges].parameter);
+        EXPECT_EQ(12345, user->roomModeChanges[roomModeChanges].channelId);
+        EXPECT_EQ("foobar1125", user->roomModeChanges[roomModeChanges].channelName);
+        ++roomModeChanges;
+    }
+}
+
+TEST_F(MessagingTests, TimeoutUser) {
+    // Log in and join a channel.
+    LogIn();
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate the condition where someone is
+    // timed out by a moderator.
+    mockServer->ReturnToClient(
+        "@ban-duration=1;ban-reason=Not\\sfunny;room-id=12345;target-user-id=1122334455;tmi-sent-ts=1539652354185 "
+        ":tmi.twitch.tv CLEARCHAT #foobar1125 :foobar1126" + CRLF
+    );
+
+    // Wait to be notified about the clear.
+    ASSERT_TRUE(user->AwaitClears(1));
+    ASSERT_EQ(1, user->clears.size());
+    EXPECT_EQ(Twitch::Messaging::ClearInfo::Type::Timeout, user->clears[0].type);
+    EXPECT_EQ(12345, user->clears[0].channelId);
+    EXPECT_EQ("foobar1125", user->clears[0].channelName);
+    EXPECT_EQ("foobar1126", user->clears[0].userName);
+    EXPECT_EQ("Not funny", user->clears[0].reason);
+    EXPECT_EQ(1, user->clears[0].duration);
+    EXPECT_EQ(1122334455, user->clears[0].userId);
+    EXPECT_EQ(1539652354185, user->clears[0].timestamp);
+}
+
+TEST_F(MessagingTests, BanUser) {
+    // Log in and join a channel.
+    LogIn();
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate the condition where someone is
+    // timed out by a moderator.
+    mockServer->ReturnToClient(
+        "@ban-reason=Was\\sa\\sdick;room-id=12345;target-user-id=1122334455;tmi-sent-ts=1539652354185 "
+        ":tmi.twitch.tv CLEARCHAT #foobar1125 :foobar1126" + CRLF
+    );
+
+    // Wait to be notified about the clear.
+    ASSERT_TRUE(user->AwaitClears(1));
+    ASSERT_EQ(1, user->clears.size());
+    EXPECT_EQ(Twitch::Messaging::ClearInfo::Type::Ban, user->clears[0].type);
+    EXPECT_EQ(12345, user->clears[0].channelId);
+    EXPECT_EQ("foobar1125", user->clears[0].channelName);
+    EXPECT_EQ("foobar1126", user->clears[0].userName);
+    EXPECT_EQ("Was a dick", user->clears[0].reason);
+    EXPECT_EQ(1122334455, user->clears[0].userId);
+    EXPECT_EQ(1539652354185, user->clears[0].timestamp);
+}
+
+TEST_F(MessagingTests, ClearAll) {
+    // Log in and join a channel.
+    LogIn();
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate the condition where someone is
+    // timed out by a moderator.
+    mockServer->ReturnToClient(
+        "@room-id=12345;tmi-sent-ts=1539652354185 "
+        ":tmi.twitch.tv CLEARCHAT #foobar1125" + CRLF
+    );
+
+    // Wait to be notified about the clear.
+    ASSERT_TRUE(user->AwaitClears(1));
+    ASSERT_EQ(1, user->clears.size());
+    EXPECT_EQ(Twitch::Messaging::ClearInfo::Type::ClearAll, user->clears[0].type);
+    EXPECT_EQ(12345, user->clears[0].channelId);
+    EXPECT_EQ("foobar1125", user->clears[0].channelName);
+    EXPECT_EQ(1539652354185, user->clears[0].timestamp);
 }

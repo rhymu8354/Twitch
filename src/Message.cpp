@@ -40,6 +40,7 @@ namespace {
             }
             const auto& name = nameValuePair[0];
             const auto& value = nameValuePair[1];
+            parsedTags.allTags[name] = value;
             if (name == "badges") {
                 const auto badges = SystemAbstractions::Split(value, ',');
                 for (const auto& badge: badges) {
