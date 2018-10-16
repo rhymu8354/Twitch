@@ -256,6 +256,7 @@ namespace {
         std::vector< Twitch::Messaging::HostInfo > hosts;
         std::vector< Twitch::Messaging::RoomModeChangeInfo > roomModeChanges;
         std::vector< Twitch::Messaging::ClearInfo > clears;
+        std::vector< Twitch::Messaging::ModInfo > mods;
         std::condition_variable wakeCondition;
         std::mutex mutex;
 
@@ -351,6 +352,15 @@ namespace {
             );
         }
 
+        bool AwaitMods(size_t numMods) {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this, numMods]{ return mods.size() == numMods; }
+            );
+        }
+
         // Twitch::Messaging::User
 
         virtual void LogIn() override {
@@ -426,6 +436,14 @@ namespace {
         ) override {
             std::lock_guard< std::mutex > lock(mutex);
             clears.push_back(std::move(clearInfo));
+            wakeCondition.notify_one();
+        }
+
+        virtual void Mod(
+            Twitch::Messaging::ModInfo&& modInfo
+        ) override {
+            std::lock_guard< std::mutex > lock(mutex);
+            mods.push_back(std::move(modInfo));
             wakeCondition.notify_one();
         }
 
@@ -1417,4 +1435,42 @@ TEST_F(MessagingTests, ClearMessage) {
     EXPECT_EQ("foobar1126", user->clears[0].userName);
     EXPECT_EQ("Don't ban me, bro!", user->clears[0].offendingMessageContent);
     EXPECT_EQ("11223344-5566-7788-1122-112233445566", user->clears[0].offendingMessageId);
+}
+
+TEST_F(MessagingTests, UserModded) {
+    // Log in and join a channel.
+    LogIn();
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate the condition where a user
+    // becomes a moderator.
+    mockServer->ReturnToClient(
+        ":jtv MODE #foobar1125 +o foobar1126" + CRLF
+    );
+
+    // Wait to be notified about the mod event.
+    ASSERT_TRUE(user->AwaitMods(1));
+    ASSERT_EQ(1, user->mods.size());
+    EXPECT_TRUE(user->mods[0].mod);
+    EXPECT_EQ("foobar1125", user->mods[0].channel);
+    EXPECT_EQ("foobar1126", user->mods[0].user);
+}
+
+TEST_F(MessagingTests, UserUnmodded) {
+    // Log in and join a channel.
+    LogIn();
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate the condition where a user
+    // is no longer a moderator.
+    mockServer->ReturnToClient(
+        ":jtv MODE #foobar1125 -o foobar1126" + CRLF
+    );
+
+    // Wait to be notified about the mod event.
+    ASSERT_TRUE(user->AwaitMods(1));
+    ASSERT_EQ(1, user->mods.size());
+    EXPECT_FALSE(user->mods[0].mod);
+    EXPECT_EQ("foobar1125", user->mods[0].channel);
+    EXPECT_EQ("foobar1126", user->mods[0].user);
 }

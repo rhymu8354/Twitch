@@ -812,6 +812,7 @@ namespace Twitch {
                 {"ROOMSTATE", &Impl::HandleServerCommandRoomState},
                 {"CLEARCHAT", &Impl::HandleServerCommandClearChat},
                 {"CLEARMSG", &Impl::HandleServerCommandClearMessage},
+                {"MODE", &Impl::HandleServerCommandMode},
             };
             dataReceived += action.message;
             Message message;
@@ -867,7 +868,7 @@ namespace Twitch {
         void HandleServerCommandJoin(Message&& message) {
             if (
                 (message.parameters.size() < 1)
-                && (message.parameters[0].length() < 2)
+                || (message.parameters[0].length() < 2)
             ) {
                 return;
             }
@@ -891,7 +892,7 @@ namespace Twitch {
         void HandleServerCommandPart(Message&& message) {
             if (
                 (message.parameters.size() < 1)
-                && (message.parameters[0].length() < 2)
+                || (message.parameters[0].length() < 2)
             ) {
                 return;
             }
@@ -915,7 +916,7 @@ namespace Twitch {
         void HandleServerCommandPrivMsg(Message&& message) {
             if (
                 (message.parameters.size() < 2)
-                && (message.parameters[0].length() < 2)
+                || (message.parameters[0].length() < 2)
             ) {
                 return;
             }
@@ -956,7 +957,7 @@ namespace Twitch {
         void HandleServerCommandWhisper(Message&& message) {
             if (
                 (message.parameters.size() < 2)
-                && (message.parameters[0].length() < 1)
+                || (message.parameters[0].length() < 1)
             ) {
                 return;
             }
@@ -977,7 +978,7 @@ namespace Twitch {
         void HandleServerCommandNotice(Message&& message) {
             if (
                 (message.parameters.size() < 2)
-                && (message.parameters[0].length() < 1)
+                || (message.parameters[0].length() < 1)
             ) {
                 return;
             }
@@ -1008,7 +1009,7 @@ namespace Twitch {
         void HandleServerCommandHostTarget(Message&& message) {
             if (
                 (message.parameters.size() < 2)
-                && (message.parameters[0].length() < 2)
+                || (message.parameters[0].length() < 2)
             ) {
                 return;
             }
@@ -1043,7 +1044,7 @@ namespace Twitch {
         void HandleServerCommandRoomState(Message&& message) {
             if (
                 (message.parameters.size() < 1)
-                && (message.parameters[0].length() < 2)
+                || (message.parameters[0].length() < 2)
             ) {
                 return;
             }
@@ -1078,7 +1079,7 @@ namespace Twitch {
             // Ignore message unless it at least has a channel name.
             if (
                 (message.parameters.size() < 1)
-                && (message.parameters[0].length() < 2)
+                || (message.parameters[0].length() < 2)
             ) {
                 return;
             }
@@ -1158,7 +1159,7 @@ namespace Twitch {
             // Ignore message unless it at least has a channel name.
             if (
                 (message.parameters.size() < 2)
-                && (message.parameters[0].length() < 2)
+                || (message.parameters[0].length() < 2)
             ) {
                 return;
             }
@@ -1185,6 +1186,43 @@ namespace Twitch {
 
             // Trigger callback to the user.
             user->Clear(std::move(clear));
+        }
+
+        /**
+         * This method is called to handle the MODE command from the
+         * Twitch server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandMode(Message&& message) {
+            // Ignore message unless it at least has a channel name.
+            if (
+                (message.parameters.size() < 3)
+                || (message.parameters[0].length() < 2)
+                || (message.parameters[1].length() < 2)
+            ) {
+                return;
+            }
+
+            // Parse channel name.
+            ModInfo mod;
+            mod.channel = message.parameters[0].substr(1);
+
+            // Determine whether modded or unmodded.
+            if (message.parameters[1] == "-o") {
+                mod.mod = false;
+            } else if (message.parameters[1] == "+o") {
+                mod.mod = true;
+            } else {
+                return;
+            }
+
+            // Extract user name.
+            mod.user = message.parameters[2];
+
+            // Trigger callback to the user.
+            user->Mod(std::move(mod));
         }
 
         /**

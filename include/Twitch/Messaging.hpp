@@ -306,6 +306,29 @@ namespace Twitch {
         };
 
         /**
+         * This contains all the information about a user's moderator status
+         * notification.
+         */
+        struct ModInfo {
+            /**
+             * This indicates whether or not the user is a moderator.
+             */
+            bool mod = false;
+
+            /**
+             * This is the channel in which the user's moderator status was
+             * announced.
+             */
+            std::string channel;
+
+            /**
+             * This is the name of the user whose moderator status was
+             * announced.
+             */
+            std::string user;
+        };
+
+        /**
          * This is a base class and interface to be implemented by the user of
          * this class, in order to receive notifications, events, and other
          * callbacks from the class.
@@ -414,6 +437,17 @@ namespace Twitch {
              *     clear notification.
              */
             virtual void Clear(ClearInfo&& clearInfo) {
+            }
+
+            /**
+             * This is called whenever the server announces that a user is or
+             * is not a moderator.
+             *
+             * @param[in] modInfo
+             *     This contains all the information about the received
+             *     mod notification.
+             */
+            virtual void Mod(ModInfo&& modInfo) {
             }
         };
 
