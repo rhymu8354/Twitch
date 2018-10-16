@@ -1131,7 +1131,7 @@ TEST_F(MessagingTests, AnonymousConnection) {
     // Send a message to the channel we just joined.
     mockServer->ClearLinesReceived();
     tmi.SendMessage("foobar1125", "Hello, World!");
-    tmi.SendWhisper("foobar1126", "HeyGuys");
+    tmi.SendWhisper("foobar1125", "HeyGuys");
     EXPECT_EQ(
         (std::vector< std::string >{
         }),
