@@ -94,6 +94,11 @@ namespace Twitch {
             uintmax_t channelId = 0;
 
             /**
+             * This is the ID of the user who sent the message.
+             */
+            uintmax_t userId = 0;
+
+            /**
              * This holds a copy of the names and values of all the tags,
              * including both the ones known about by the parser (above) as
              * well as those not known.
@@ -122,11 +127,6 @@ namespace Twitch {
             std::string userName;
 
             /**
-             * This is the ID of the user who sent the message.
-             */
-            uintmax_t userId = 0;
-
-            /**
              * This is the content of the message.
              */
             std::string messageContent;
@@ -148,14 +148,14 @@ namespace Twitch {
          */
         struct WhisperInfo {
             /**
+             * This contains information provided in the message's tags.
+             */
+            TagsInfo tags;
+
+            /**
              * This is the name of the user who sent the message.
              */
             std::string userName;
-
-            /**
-             * This is the ID of the user who sent the message.
-             */
-            uintmax_t userId = 0;
 
             /**
              * This is the content of the message.
@@ -307,13 +307,6 @@ namespace Twitch {
             std::string userName;
 
             /**
-             * This is the ID of the user who was timed out or banned.
-             *
-             * NOTE: only applies for types Timeout and Ban.
-             */
-            uintmax_t userId = 0;
-
-            /**
              * This is a human-readable string meant to convey an explanation
              * of why the user was timed out or banned.
              *
@@ -390,13 +383,6 @@ namespace Twitch {
             std::string channel;
 
             /**
-             * This is the ID of the user whose state was announced.
-             *
-             * NOTE: This is only provided for the global state notification.
-             */
-            uintmax_t userId = 0;
-
-            /**
              * This contains information provided in the message's tags.
              */
             TagsInfo tags;
@@ -448,11 +434,6 @@ namespace Twitch {
              * This is the name of the user who subscribed.
              */
             std::string userName;
-
-            /**
-             * This is the ID of the user who subscribed.
-             */
-            uintmax_t userId = 0;
 
             /**
              * This is the display name of the user who received the sub, if it

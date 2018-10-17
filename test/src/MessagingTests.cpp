@@ -1088,9 +1088,9 @@ TEST_F(MessagingTests, ReceiveMessagesWithTagsCapabilityNoBits) {
     ASSERT_EQ(1, user->messages.size());
     EXPECT_EQ("foobar1125", user->messages[0].channelName);
     EXPECT_EQ("foobar1126", user->messages[0].userName);
-    EXPECT_EQ(54321, user->messages[0].userId);
     EXPECT_EQ("1122aa44-55ff-ee88-11cc-1122dd44bb66", user->messages[0].messageId);
     EXPECT_EQ("Hello HeyGuys This is a test SeemsGood Also did I say HeyGuys hello?", user->messages[0].messageContent);
+    EXPECT_EQ(54321, user->messages[0].tags.userId);
     EXPECT_EQ(12345, user->messages[0].tags.channelId);
     EXPECT_EQ(1539652354, user->messages[0].tags.timestamp);
     EXPECT_EQ(185, user->messages[0].tags.timeMilliseconds);
@@ -1153,9 +1153,9 @@ TEST_F(MessagingTests, ReceiveMessagesWithTagsCapabilityWithBits) {
     ASSERT_EQ(1, user->messages.size());
     EXPECT_EQ("foobar1125", user->messages[0].channelName);
     EXPECT_EQ("foobar1126", user->messages[0].userName);
-    EXPECT_EQ(54321, user->messages[0].userId);
     EXPECT_EQ("1122aa44-55ff-ee88-11cc-1122dd44bb66", user->messages[0].messageId);
     EXPECT_EQ("cheer100 Grats!", user->messages[0].messageContent);
+    EXPECT_EQ(54321, user->messages[0].tags.userId);
     EXPECT_EQ(12345, user->messages[0].tags.channelId);
     EXPECT_EQ(1539652354, user->messages[0].tags.timestamp);
     EXPECT_EQ(185, user->messages[0].tags.timeMilliseconds);
@@ -1264,8 +1264,8 @@ TEST_F(MessagingTests, ReceiveWhisper) {
     ASSERT_TRUE(user->AwaitWhispers(1));
     ASSERT_EQ(1, user->whispers.size());
     EXPECT_EQ("foobar1126", user->whispers[0].userName);
-    EXPECT_EQ(12345, user->whispers[0].userId);
     EXPECT_EQ("Hello, World!", user->whispers[0].message);
+    EXPECT_EQ(12345, user->whispers[0].tags.userId);
 }
 
 TEST_F(MessagingTests, SendWhisper) {
@@ -1557,7 +1557,7 @@ TEST_F(MessagingTests, TimeoutUser) {
     EXPECT_EQ("foobar1126", user->clears[0].userName);
     EXPECT_EQ("Not funny", user->clears[0].reason);
     EXPECT_EQ(1, user->clears[0].duration);
-    EXPECT_EQ(1122334455, user->clears[0].userId);
+    EXPECT_EQ(1122334455, user->clears[0].tags.userId);
     EXPECT_EQ(12345, user->clears[0].tags.channelId);
     EXPECT_EQ(1539652354, user->clears[0].tags.timestamp);
     EXPECT_EQ(185, user->clears[0].tags.timeMilliseconds);
@@ -1582,7 +1582,7 @@ TEST_F(MessagingTests, BanUser) {
     EXPECT_EQ("foobar1125", user->clears[0].channelName);
     EXPECT_EQ("foobar1126", user->clears[0].userName);
     EXPECT_EQ("Was a dick", user->clears[0].reason);
-    EXPECT_EQ(1122334455, user->clears[0].userId);
+    EXPECT_EQ(1122334455, user->clears[0].tags.userId);
     EXPECT_EQ(12345, user->clears[0].tags.channelId);
     EXPECT_EQ(1539652354, user->clears[0].tags.timestamp);
     EXPECT_EQ(185, user->clears[0].tags.timeMilliseconds);
@@ -1685,7 +1685,7 @@ TEST_F(MessagingTests, GlobalUserState) {
     ASSERT_TRUE(user->AwaitUserState(1));
     ASSERT_EQ(1, user->userStates.size());
     EXPECT_TRUE(user->userStates[0].global);
-    EXPECT_EQ(12345, user->userStates[0].userId);
+    EXPECT_EQ(12345, user->userStates[0].tags.userId);
     EXPECT_EQ("FooBar1124", user->userStates[0].tags.displayName);
     EXPECT_EQ(
         (std::set< std::string >{
@@ -1779,12 +1779,12 @@ TEST_F(MessagingTests, ReceiveSubNotificationResub) {
     ASSERT_EQ(1, user->subs.size());
     EXPECT_EQ("foobar1125", user->subs[0].channelName);
     EXPECT_EQ("foobar1126", user->subs[0].userName);
-    EXPECT_EQ(1122334455, user->subs[0].userId);
     EXPECT_EQ("Is this all I get for subbing to your channel?  FeelsBadMan", user->subs[0].userMessage);
     EXPECT_EQ("foobar1126 just subscribed with a Tier 1 sub. foobar1126 subscribed for 4 months in a row!", user->subs[0].systemMessage);
     EXPECT_EQ(Twitch::Messaging::SubInfo::Type::Resub, user->subs[0].type);
     EXPECT_EQ("The PogChamp Plan", user->subs[0].planName);
     EXPECT_EQ(1000, user->subs[0].planId);
+    EXPECT_EQ(1122334455, user->subs[0].tags.userId);
     EXPECT_EQ(12345, user->subs[0].tags.channelId);
     EXPECT_EQ(1539652354, user->subs[0].tags.timestamp);
     EXPECT_EQ(185, user->subs[0].tags.timeMilliseconds);
@@ -1842,12 +1842,12 @@ TEST_F(MessagingTests, ReceiveSubNotificationNewSub) {
     ASSERT_EQ(1, user->subs.size());
     EXPECT_EQ("foobar1125", user->subs[0].channelName);
     EXPECT_EQ("foobar1126", user->subs[0].userName);
-    EXPECT_EQ(1122334455, user->subs[0].userId);
     EXPECT_EQ("Is this all I get for subbing to your channel?  FeelsBadMan", user->subs[0].userMessage);
     EXPECT_EQ("foobar1126 just subscribed with a Tier 1 sub. foobar1126 subscribed for 4 months in a row!", user->subs[0].systemMessage);
     EXPECT_EQ(Twitch::Messaging::SubInfo::Type::Sub, user->subs[0].type);
     EXPECT_EQ("The PogChamp Plan", user->subs[0].planName);
     EXPECT_EQ(1000, user->subs[0].planId);
+    EXPECT_EQ(1122334455, user->subs[0].tags.userId);
     EXPECT_EQ(12345, user->subs[0].tags.channelId);
     EXPECT_EQ(1539652354, user->subs[0].tags.timestamp);
     EXPECT_EQ(185, user->subs[0].tags.timeMilliseconds);
@@ -1909,7 +1909,6 @@ TEST_F(MessagingTests, ReceiveSubNotificationGifted) {
     ASSERT_EQ(1, user->subs.size());
     EXPECT_EQ("foobar1125", user->subs[0].channelName);
     EXPECT_EQ("foobar1126", user->subs[0].userName);
-    EXPECT_EQ(1122334455, user->subs[0].userId);
     EXPECT_EQ("", user->subs[0].userMessage);
     EXPECT_EQ("foobar1126 gifted a Tier 1 sub to FooBar1124! They have given 3 Gift Subs in the channel!", user->subs[0].systemMessage);
     EXPECT_EQ(Twitch::Messaging::SubInfo::Type::Gifted, user->subs[0].type);
@@ -1919,6 +1918,7 @@ TEST_F(MessagingTests, ReceiveSubNotificationGifted) {
     EXPECT_EQ(3, user->subs[0].senderCount);
     EXPECT_EQ("The PogChamp Plan", user->subs[0].planName);
     EXPECT_EQ(1000, user->subs[0].planId);
+    EXPECT_EQ(1122334455, user->subs[0].tags.userId);
     EXPECT_EQ(12345, user->subs[0].tags.channelId);
     EXPECT_EQ(1539652354, user->subs[0].tags.timestamp);
     EXPECT_EQ(185, user->subs[0].tags.timeMilliseconds);
@@ -1977,7 +1977,6 @@ TEST_F(MessagingTests, ReceiveSubNotificationMysteryGift) {
     ASSERT_EQ(1, user->subs.size());
     EXPECT_EQ("foobar1125", user->subs[0].channelName);
     EXPECT_EQ("foobar1126", user->subs[0].userName);
-    EXPECT_EQ(1122334455, user->subs[0].userId);
     EXPECT_EQ("", user->subs[0].userMessage);
     EXPECT_EQ("foobar1126 is gifting 3 Tier 1 Subs to FooBar1124's community! They've gifted a total of 15 in the channel!", user->subs[0].systemMessage);
     EXPECT_EQ(Twitch::Messaging::SubInfo::Type::MysteryGift, user->subs[0].type);
@@ -1985,6 +1984,7 @@ TEST_F(MessagingTests, ReceiveSubNotificationMysteryGift) {
     EXPECT_EQ(15, user->subs[0].senderCount);
     EXPECT_EQ("The PogChamp Plan", user->subs[0].planName);
     EXPECT_EQ(1000, user->subs[0].planId);
+    EXPECT_EQ(1122334455, user->subs[0].tags.userId);
     EXPECT_EQ(12345, user->subs[0].tags.channelId);
     EXPECT_EQ(1539652354, user->subs[0].tags.timestamp);
     EXPECT_EQ(185, user->subs[0].tags.timeMilliseconds);

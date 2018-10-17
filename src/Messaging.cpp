@@ -947,15 +947,6 @@ namespace Twitch {
             // Copy message content.
             messageInfo.messageContent = message.parameters[1];
 
-            // Parse user ID.
-            const auto userIdTag = message.tags.allTags.find("user-id");
-            if (
-                (userIdTag == message.tags.allTags.end())
-                || (sscanf(userIdTag->second.c_str(), "%" SCNuMAX, &messageInfo.userId) != 1)
-            ) {
-                messageInfo.userId = 0;
-            }
-
             // Parse message ID.
             const auto messageIdTag = message.tags.allTags.find("id");
             if (messageIdTag != message.tags.allTags.end()) {
@@ -1023,14 +1014,8 @@ namespace Twitch {
             // Copy whisper message.
             whisperInfo.message = message.parameters[1];
 
-            // Parse user ID.
-            const auto userIdTag = message.tags.allTags.find("user-id");
-            if (
-                (userIdTag == message.tags.allTags.end())
-                || (sscanf(userIdTag->second.c_str(), "%" SCNuMAX, &whisperInfo.userId) != 1)
-            ) {
-                whisperInfo.userId = 0;
-            }
+            // Copy message tags.
+            whisperInfo.tags = message.tags;
 
             // Trigger user callback.
             user->Whisper(std::move(whisperInfo));
@@ -1165,15 +1150,6 @@ namespace Twitch {
                 // Extract user name.
                 clear.userName = message.parameters[1];
 
-                // Parse user ID.
-                const auto userIdTag = message.tags.allTags.find("target-user-id");
-                if (
-                    (userIdTag == message.tags.allTags.end())
-                    || (sscanf(userIdTag->second.c_str(), "%" SCNuMAX, &clear.userId) != 1)
-                ) {
-                    clear.userId = 0;
-                }
-
                 // Extract ban/timeout reason, if any.
                 const auto reasonTag = message.tags.allTags.find("ban-reason");
                 if (reasonTag != message.tags.allTags.end()) {
@@ -1297,15 +1273,6 @@ namespace Twitch {
             // Copy tags.
             userState.tags = message.tags;
 
-            // Parse user ID.
-            const auto userIdTag = message.tags.allTags.find("user-id");
-            if (
-                (userIdTag == message.tags.allTags.end())
-                || (sscanf(userIdTag->second.c_str(), "%" SCNuMAX, &userState.userId) != 1)
-            ) {
-                userState.userId = 0;
-            }
-
             // Trigger user callback.
             user->UserState(std::move(userState));
         }
@@ -1375,15 +1342,6 @@ namespace Twitch {
             const auto userNameTag = message.tags.allTags.find("login");
             if (userNameTag != message.tags.allTags.end()) {
                 sub.userName = userNameTag->second;
-            }
-
-            // Parse user ID.
-            const auto userIdTag = message.tags.allTags.find("user-id");
-            if (
-                (userIdTag == message.tags.allTags.end())
-                || (sscanf(userIdTag->second.c_str(), "%" SCNuMAX, &sub.userId) != 1)
-            ) {
-                sub.userId = 0;
             }
 
             // Extract user message, if any.

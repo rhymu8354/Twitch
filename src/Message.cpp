@@ -88,6 +88,13 @@ namespace {
                 if (sscanf(value.c_str(), "%" SCNuMAX, &parsedTags.channelId) != 1) {
                     parsedTags.channelId = 0;
                 }
+            } else if (
+                (name == "user-id")
+                || (name == "target-user-id")
+            ) {
+                if (sscanf(value.c_str(), "%" SCNuMAX, &parsedTags.userId) != 1) {
+                    parsedTags.userId = 0;
+                }
             }
         }
         return parsedTags;
