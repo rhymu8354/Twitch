@@ -128,6 +128,12 @@ namespace Twitch {
              * This is the ID the message.
              */
             std::string messageId;
+
+            /**
+             * This is the number of bits that were cheered/donated with the
+             * message.
+             */
+            size_t bits = 0;
         };
 
         /**

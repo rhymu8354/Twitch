@@ -1012,7 +1012,7 @@ TEST_F(MessagingTests, ReceiveMessagesNoTagsCapability) {
     EXPECT_EQ("Hello, World!", user->messages[0].messageContent);
 }
 
-TEST_F(MessagingTests, ReceiveMessagesWithTagsCapability) {
+TEST_F(MessagingTests, ReceiveMessagesWithTagsCapabilityNoBits) {
     // Log in (with tags capability) and join a channel.
     LogIn(true);
     Join("foobar1125");
@@ -1072,6 +1072,69 @@ TEST_F(MessagingTests, ReceiveMessagesWithTagsCapability) {
         user->messages[0].tags.emotes
     );
     EXPECT_EQ(0x5B99FF, user->messages[0].tags.color);
+    EXPECT_EQ(0, user->messages[0].bits);
+}
+
+TEST_F(MessagingTests, ReceiveMessagesWithTagsCapabilityWithBits) {
+    // Log in (with tags capability) and join a channel.
+    LogIn(true);
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate someone else chatting in the
+    // room.
+    mockServer->ReturnToClient(
+        // tags
+        "@badges=moderator/1,subscriber/12,partner/1;"
+        "bits=100;"
+        "color=#5B99FF;"
+        "display-name=FooBarMaster;"
+        "emotes=;"
+        "flags=;"
+        "id=1122aa44-55ff-ee88-11cc-1122dd44bb66;"
+        "mod=1;"
+        "room-id=12345;"
+        "subscriber=1;"
+        "tmi-sent-ts=1539652354185;"
+        "turbo=0;"
+        "user-id=54321;"
+        "user-type=mod "
+
+        // prefix
+        ":foobar1126!foobar1126@foobar1126.tmi.twitch.tv "
+
+        // command
+        "PRIVMSG "
+
+        // arguments
+        "#foobar1125 :cheer100 Grats!" + CRLF
+    );
+
+    // Wait for the message to be received.
+    ASSERT_TRUE(user->AwaitMessages(1));
+    ASSERT_EQ(1, user->messages.size());
+    EXPECT_EQ("foobar1125", user->messages[0].channelName);
+    EXPECT_EQ(12345, user->messages[0].channelId);
+    EXPECT_EQ("foobar1126", user->messages[0].userName);
+    EXPECT_EQ(54321, user->messages[0].userId);
+    EXPECT_EQ("1122aa44-55ff-ee88-11cc-1122dd44bb66", user->messages[0].messageId);
+    EXPECT_EQ("cheer100 Grats!", user->messages[0].messageContent);
+    EXPECT_EQ(1539652354185, user->messages[0].tags.timestamp);
+    EXPECT_EQ("FooBarMaster", user->messages[0].tags.displayName);
+    EXPECT_EQ(
+        (std::set< std::string >{
+            "moderator/1",
+            "subscriber/12",
+            "partner/1",
+        }),
+        user->messages[0].tags.badges
+    );
+    EXPECT_EQ(
+        (std::map< int, std::vector< std::pair< int, int > > >{
+        }),
+        user->messages[0].tags.emotes
+    );
+    EXPECT_EQ(0x5B99FF, user->messages[0].tags.color);
+    EXPECT_EQ(100, user->messages[0].bits);
 }
 
 TEST_F(MessagingTests, SendMessage) {

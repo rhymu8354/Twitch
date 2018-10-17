@@ -955,6 +955,14 @@ namespace Twitch {
                 messageInfo.messageId = messageIdTag->second;
             }
 
+            // Parse bits.
+            const auto bitsTag = message.tags.allTags.find("bits");
+            if (bitsTag != message.tags.allTags.end()) {
+                if (sscanf(bitsTag->second.c_str(), "%zu", &messageInfo.bits) != 1) {
+                    messageInfo.bits = 0;
+                }
+            }
+
             // Copy tags.
             messageInfo.tags = message.tags;
 
