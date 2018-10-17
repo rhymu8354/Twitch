@@ -17,6 +17,7 @@
 #include <list>
 #include <map>
 #include <mutex>
+#include <regex>
 #include <set>
 #include <stdint.h>
 #include <stdlib.h>
@@ -40,6 +41,12 @@ namespace {
      * before timing out.
      */
     constexpr double LOG_IN_TIMEOUT_SECONDS = 5.0;
+
+    /**
+     * This regular expression should only match the nickname of an anonymous
+     * Twitch user.
+     */
+    static const std::regex ANONYMOUS_NICKNAME_PATTERN("justinfan([0-9]+)");
 
     /**
      * This is used to convey an action for the Messaging class worker
@@ -880,8 +887,12 @@ namespace Twitch {
             if (nicknameDelimiter == std::string::npos) {
                 return;
             }
+            const auto nickname = message.prefix.substr(0, nicknameDelimiter);
+            if (std::regex_match(nickname, ANONYMOUS_NICKNAME_PATTERN)) {
+                return;
+            }
             MembershipInfo membershipInfo;
-            membershipInfo.user = message.prefix.substr(0, nicknameDelimiter);
+            membershipInfo.user = nickname;
             membershipInfo.channel = message.parameters[0].substr(1);
             user->Join(std::move(membershipInfo));
         }
@@ -904,8 +915,12 @@ namespace Twitch {
             if (nicknameDelimiter == std::string::npos) {
                 return;
             }
+            const auto nickname = message.prefix.substr(0, nicknameDelimiter);
+            if (std::regex_match(nickname, ANONYMOUS_NICKNAME_PATTERN)) {
+                return;
+            }
             MembershipInfo membershipInfo;
-            membershipInfo.user = message.prefix.substr(0, nicknameDelimiter);
+            membershipInfo.user = nickname;
             membershipInfo.channel = message.parameters[0].substr(1);
             user->Leave(std::move(membershipInfo));
         }

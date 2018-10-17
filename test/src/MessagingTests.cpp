@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include <mutex>
+#include <regex>
 #include <string>
 #include <SystemAbstractions/StringExtensions.hpp>
 #include <Twitch/Connection.hpp>
@@ -25,6 +26,12 @@ namespace {
      * sent to or from Twitch chat servers.
      */
     const std::string CRLF = "\r\n";
+
+    /**
+     * This regular expression should only match the nickname of an anonymous
+     * Twitch user.
+     */
+    static const std::regex ANONYMOUS_NICKNAME_PATTERN("justinfan([0-9]+)");
 
     /**
      * This is a fake Twitch server used to test the Messaging class.
@@ -597,13 +604,44 @@ struct MessagingTests
      * This is a convenience method which performs all the necessary steps to
      * join a channel.
      */
-    void Join(const std::string& channel) {
+    void Join(
+        const std::string& channel,
+        const std::string& nickname = "foobar1124"
+    ) {
         tmi.Join(channel);
         (void)mockServer->AwaitLineReceived("JOIN #" + channel);
         mockServer->ReturnToClient(
-            ":foobar1124!foobar1124@foobar1124.tmi.twitch.tv JOIN #" + channel + CRLF
+            SystemAbstractions::sprintf(
+                ":%s!%s@%s.tmi.twitch.tv JOIN #%s%s",
+                nickname.c_str(), nickname.c_str(), nickname.c_str(),
+                channel.c_str(), CRLF.c_str()
+            )
         );
-        (void)user->AwaitJoins(1);
+        if (!std::regex_match(nickname, ANONYMOUS_NICKNAME_PATTERN)) {
+            (void)user->AwaitJoins(1);
+        }
+    }
+
+    /**
+     * This is a convenience method which performs all the necessary steps to
+     * leave a channel.
+     */
+    void Leave(
+        const std::string& channel,
+        const std::string& nickname = "foobar1124"
+    ) {
+        tmi.Leave(channel);
+        (void)mockServer->AwaitLineReceived("PART #" + channel);
+        mockServer->ReturnToClient(
+            SystemAbstractions::sprintf(
+                ":%s!%s@%s.tmi.twitch.tv PART #%s%s",
+                nickname.c_str(), nickname.c_str(), nickname.c_str(),
+                channel.c_str(), CRLF.c_str()
+            )
+        );
+        if (!std::regex_match(nickname, ANONYMOUS_NICKNAME_PATTERN)) {
+            (void)user->AwaitLeaves(1);
+        }
     }
 
     // ::testing::Test
@@ -1321,7 +1359,7 @@ TEST_F(MessagingTests, AnonymousConnection) {
     EXPECT_FALSE(mockServer->WasThereAConnectionProblem());
     EXPECT_FALSE(mockServer->WasPasswordOffered());
     const auto nickname = mockServer->GetNicknameOffered();
-    EXPECT_EQ("justinfan", nickname.substr(0, 9));
+    EXPECT_TRUE(std::regex_match(nickname, ANONYMOUS_NICKNAME_PATTERN));
     intmax_t scratch;
     EXPECT_EQ(
         SystemAbstractions::ToIntegerResult::Success,
@@ -1329,8 +1367,11 @@ TEST_F(MessagingTests, AnonymousConnection) {
     );
     EXPECT_FALSE(mockServer->IsDisconnected());
 
-    // Join a channel.
-    Join("foobar1125");
+    // Join a channel, but don't expect a Join callback, since it could be
+    // confused by the app as another user with a name starting with
+    // "justinfan" joining the channel.
+    Join("foobar1125", nickname);
+    EXPECT_FALSE(user->AwaitJoins(1));
 
     // Have the pretend Twitch server simulate someone else chatting in the
     // room.
@@ -1354,6 +1395,10 @@ TEST_F(MessagingTests, AnonymousConnection) {
         }),
         mockServer->GetLinesReceived()
     );
+
+    // Leave the channel and verify no Leave callback is triggered.
+    Leave("foobar1125", nickname);
+    EXPECT_FALSE(user->AwaitLeaves(1));
 }
 
 TEST_F(MessagingTests, ChannelStartsHostingSomeoneElse) {
