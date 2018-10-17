@@ -216,8 +216,8 @@ namespace Twitch {
             std::string beingHosted;
 
             /**
-             * This is the number of viewers currently in the channel being
-             * hosted.
+             * This is the number of viewers from the hosting channel that are
+             * visiting the channel being hosted.
              */
             size_t viewers = 0;
         };
