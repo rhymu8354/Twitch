@@ -1685,13 +1685,13 @@ TEST_F(MessagingTests, Reconnect) {
     ASSERT_TRUE(user->AwaitDoom());
 }
 
-TEST_F(MessagingTests, ReceiveSubNotification) {
+TEST_F(MessagingTests, ReceiveSubNotificationResub) {
     // Log in (with tags capability) and join a channel.
     LogIn(true);
     Join("foobar1125");
 
-    // Have the pretend Twitch server simulate someone else subscribing to the
-    // channel.
+    // Have the pretend Twitch server simulate someone else re-subscribing to
+    // the channel.
     mockServer->ReturnToClient(
         // tags
         "@badges=subscriber/3;"
@@ -1733,7 +1733,139 @@ TEST_F(MessagingTests, ReceiveSubNotification) {
     EXPECT_EQ(1122334455, user->subs[0].userId);
     EXPECT_EQ("Is this all I get for subbing to your channel?  FeelsBadMan", user->subs[0].userMessage);
     EXPECT_EQ("foobar1126 just subscribed with a Tier 1 sub. foobar1126 subscribed for 4 months in a row!", user->subs[0].systemMessage);
-    EXPECT_EQ("resub", user->subs[0].type);
+    EXPECT_EQ(Twitch::Messaging::SubInfo::Type::Resub, user->subs[0].type);
+    EXPECT_EQ("The PogChamp Plan", user->subs[0].planName);
+    EXPECT_EQ(1000, user->subs[0].planId);
+    EXPECT_EQ(1539652354185, user->subs[0].tags.timestamp);
+    EXPECT_EQ("FooBar1126", user->subs[0].tags.displayName);
+    EXPECT_EQ(
+        (std::set< std::string >{
+            "subscriber/3",
+        }),
+        user->subs[0].tags.badges
+    );
+    EXPECT_EQ(0x008000, user->subs[0].tags.color);
+}
+
+TEST_F(MessagingTests, ReceiveSubNotificationNewSub) {
+    // Log in (with tags capability) and join a channel.
+    LogIn(true);
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate someone else subscribing to the
+    // channel for the first time, or after not being subscribed for a while.
+    mockServer->ReturnToClient(
+        // tags
+        "@badges=subscriber/3;"
+        "color=#008000;"
+        "display-name=FooBar1126;"
+        "emotes=;"
+        "flags=;"
+        "id=11223344-5566-7788-1122-112233445566;"
+        "login=foobar1126;"
+        "mod=0;"
+        "msg-id=sub;"
+        "msg-param-months=4;"
+        "msg-param-sub-plan-name=The\\sPogChamp\\sPlan;"
+        "msg-param-sub-plan=1000;"
+        "room-id=12345;"
+        "subscriber=1;"
+        "system-msg=foobar1126\\sjust\\ssubscribed\\swith\\sa\\sTier\\s1\\ssub.\\sfoobar1126\\ssubscribed\\sfor\\s4\\smonths\\sin\\sa\\srow!;"
+        "tmi-sent-ts=1539652354185;"
+        "turbo=0;"
+        "user-id=1122334455;"
+        "user-type= "
+
+        // prefix
+        ":tmi.twitch.tv "
+
+        // command
+        "USERNOTICE "
+
+        // arguments
+        "#foobar1125 :Is this all I get for subbing to your channel?  FeelsBadMan" + CRLF
+    );
+
+    // Wait for the message to be received.
+    ASSERT_TRUE(user->AwaitSubs(1));
+    ASSERT_EQ(1, user->subs.size());
+    EXPECT_EQ("foobar1125", user->subs[0].channelName);
+    EXPECT_EQ(12345, user->subs[0].channelId);
+    EXPECT_EQ("foobar1126", user->subs[0].userName);
+    EXPECT_EQ(1122334455, user->subs[0].userId);
+    EXPECT_EQ("Is this all I get for subbing to your channel?  FeelsBadMan", user->subs[0].userMessage);
+    EXPECT_EQ("foobar1126 just subscribed with a Tier 1 sub. foobar1126 subscribed for 4 months in a row!", user->subs[0].systemMessage);
+    EXPECT_EQ(Twitch::Messaging::SubInfo::Type::Sub, user->subs[0].type);
+    EXPECT_EQ("The PogChamp Plan", user->subs[0].planName);
+    EXPECT_EQ(1000, user->subs[0].planId);
+    EXPECT_EQ(1539652354185, user->subs[0].tags.timestamp);
+    EXPECT_EQ("FooBar1126", user->subs[0].tags.displayName);
+    EXPECT_EQ(
+        (std::set< std::string >{
+            "subscriber/3",
+        }),
+        user->subs[0].tags.badges
+    );
+    EXPECT_EQ(0x008000, user->subs[0].tags.color);
+}
+
+TEST_F(MessagingTests, ReceiveSubNotificationGifted) {
+    // Log in (with tags capability) and join a channel.
+    LogIn(true);
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate someone else subscribing to the
+    // channel for the first time, or after not being subscribed for a while.
+    mockServer->ReturnToClient(
+        // tags
+        "@badges=subscriber/3;"
+        "color=#008000;"
+        "display-name=FooBar1126;"
+        "emotes=;"
+        "flags=;"
+        "id=11223344-5566-7788-1122-112233445566;"
+        "login=foobar1126;"
+        "mod=0;"
+        "msg-id=subgift;"
+        "msg-param-months=1;"
+        "msg-param-recipient-display-name=FooBar1124;"
+        "msg-param-recipient-id=5544332211;"
+        "msg-param-recipient-user-name=foobar1124;"
+        "msg-param-sender-count=3;"
+        "msg-param-sub-plan-name=The\\sPogChamp\\sPlan;"
+        "msg-param-sub-plan=1000;"
+        "room-id=12345;"
+        "subscriber=1;"
+        "system-msg=foobar1126\\sgifted\\sa\\sTier\\s1\\ssub\\sto\\sFooBar1124!\\sThey\\shave\\sgiven\\s3\\sGift\\sSubs\\sin\\sthe\\schannel!;"
+        "tmi-sent-ts=1539652354185;"
+        "turbo=0;"
+        "user-id=1122334455;"
+        "user-type= "
+
+        // prefix
+        ":tmi.twitch.tv "
+
+        // command
+        "USERNOTICE "
+
+        // arguments
+        "#foobar1125" + CRLF
+    );
+
+    // Wait for the message to be received.
+    ASSERT_TRUE(user->AwaitSubs(1));
+    ASSERT_EQ(1, user->subs.size());
+    EXPECT_EQ("foobar1125", user->subs[0].channelName);
+    EXPECT_EQ(12345, user->subs[0].channelId);
+    EXPECT_EQ("foobar1126", user->subs[0].userName);
+    EXPECT_EQ(1122334455, user->subs[0].userId);
+    EXPECT_EQ("", user->subs[0].userMessage);
+    EXPECT_EQ("foobar1126 gifted a Tier 1 sub to FooBar1124! They have given 3 Gift Subs in the channel!", user->subs[0].systemMessage);
+    EXPECT_EQ(Twitch::Messaging::SubInfo::Type::Gifted, user->subs[0].type);
+    EXPECT_EQ("FooBar1124", user->subs[0].recipientDisplayName);
+    EXPECT_EQ("foobar1124", user->subs[0].recipientUserName);
+    EXPECT_EQ(5544332211, user->subs[0].recipientId);
+    EXPECT_EQ(3, user->subs[0].senderCount);
     EXPECT_EQ("The PogChamp Plan", user->subs[0].planName);
     EXPECT_EQ(1000, user->subs[0].planId);
     EXPECT_EQ(1539652354185, user->subs[0].tags.timestamp);

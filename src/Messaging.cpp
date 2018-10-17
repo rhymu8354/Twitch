@@ -1408,19 +1408,56 @@ namespace Twitch {
             }
 
             // Extract subscription type.
-            const auto& subTypeTag = message.tags.allTags.find("msg-id");
+            const auto subTypeTag = message.tags.allTags.find("msg-id");
             if (subTypeTag != message.tags.allTags.end()) {
-                sub.type = UnescapeSpaces(subTypeTag->second);
+                const auto& subType = subTypeTag->second;
+                if (subType == "sub") {
+                    sub.type = SubInfo::Type::Sub;
+                } else if (subType == "resub") {
+                    sub.type = SubInfo::Type::Resub;
+                } else if (subType == "subgift") {
+                    sub.type = SubInfo::Type::Gifted;
+
+                    // Extract recipient display name.
+                    const auto recipientDisplayNameTag = message.tags.allTags.find("msg-param-recipient-display-name");
+                    if (recipientDisplayNameTag != message.tags.allTags.end()) {
+                        sub.recipientDisplayName = recipientDisplayNameTag->second;
+                    }
+
+                    // Extract recipient user name.
+                    const auto recipientUserNameTag = message.tags.allTags.find("msg-param-recipient-user-name");
+                    if (recipientUserNameTag != message.tags.allTags.end()) {
+                        sub.recipientUserName = recipientUserNameTag->second;
+                    }
+
+                    // Parse recipient ID.
+                    const auto recipientIdTag = message.tags.allTags.find("msg-param-recipient-id");
+                    if (
+                        (recipientIdTag == message.tags.allTags.end())
+                        || (sscanf(recipientIdTag->second.c_str(), "%" SCNuMAX, &sub.recipientId) != 1)
+                    ) {
+                        sub.recipientId = 0;
+                    }
+
+                    // Parse sender gift count.
+                    const auto senderCountTag = message.tags.allTags.find("msg-param-sender-count");
+                    if (
+                        (senderCountTag == message.tags.allTags.end())
+                        || (sscanf(senderCountTag->second.c_str(), "%zu", &sub.senderCount) != 1)
+                    ) {
+                        sub.senderCount = 0;
+                    }
+                }
             }
 
             // Extract plan name.
-            const auto& planNameTag = message.tags.allTags.find("msg-param-sub-plan-name");
+            const auto planNameTag = message.tags.allTags.find("msg-param-sub-plan-name");
             if (planNameTag != message.tags.allTags.end()) {
                 sub.planName = UnescapeSpaces(planNameTag->second);
             }
 
             // Parse plan ID.
-            const auto& planIdTag = message.tags.allTags.find("msg-param-sub-plan");
+            const auto planIdTag = message.tags.allTags.find("msg-param-sub-plan");
             if (
                 (planIdTag == message.tags.allTags.end())
                 || (sscanf(planIdTag->second.c_str(), "%" SCNuMAX, &sub.planId) != 1)

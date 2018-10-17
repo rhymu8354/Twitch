@@ -409,6 +409,33 @@ namespace Twitch {
          */
         struct SubInfo {
             /**
+             * This identifies the type of the subscription notification.
+             */
+            enum class Type {
+                /**
+                 * Unrecognized type of subscription notification; check
+                 * "msg-id" tag.
+                 */
+                Unknown,
+
+                /**
+                 * New subscription, or subscription after not being
+                 * subscribed
+                 */
+                Sub,
+
+                /**
+                 * Renewed subscription
+                 */
+                Resub,
+
+                /**
+                 * Subscription gifted to a user from another user
+                 */
+                Gifted,
+            } type = Type::Unknown;
+
+            /**
              * This is the channel to which the user subscribed.
              */
             std::string channelName;
@@ -429,6 +456,30 @@ namespace Twitch {
             uintmax_t userId = 0;
 
             /**
+             * This is the display name of the user who received the sub, if it
+             * was gifted.
+             */
+            std::string recipientDisplayName;
+
+            /**
+             * This is the user name of the user who received the sub, if it
+             * was gifted.
+             */
+            std::string recipientUserName;
+
+            /**
+             * This is the ID of the user who received the sub, if it was
+             * gifted.
+             */
+            uintmax_t recipientId = 0;
+
+            /**
+             * If this is a gifted sub, this is the number of gifted subs the
+             * gifter has given so far in this channel.
+             */
+            size_t senderCount = 0;
+
+            /**
              * This is the content of any message the user included when they
              * subscribed.
              */
@@ -439,13 +490,6 @@ namespace Twitch {
              * user subscribed.
              */
             std::string systemMessage;
-
-            /**
-             * This is the type of subscription event.
-             * - sub - new subscription
-             * - resub - subscription renewal.
-             */
-            std::string type;
 
             /**
              * This is the name of the subscription plan chosen by the user.
