@@ -918,19 +918,63 @@ namespace Twitch {
          *     This holds information about the server command to handle.
          */
         void HandleServerCommandPrivMsg(Message&& message) {
-            if (
-                (message.parameters.size() < 2)
-                || (message.parameters[0].length() < 2)
-            ) {
+            // Ignore message unless it at least has a channel/user name and
+            // message.
+            if (message.parameters.size() < 2) {
                 return;
             }
+
+            // Extract user name from message prefix.
             MessageInfo messageInfo;
-            messageInfo.tags = message.tags;
             const auto nickname = ExtractNicknameFromPrefix(message.prefix);
-            messageInfo.user = nickname;
-            messageInfo.message = message.parameters[1];
+            messageInfo.userName = nickname;
+
+            // Copy message content.
+            messageInfo.messageContent = message.parameters[1];
+
+            // Parse user ID.
+            const auto& userIdTag = message.tags.allTags.find("user-id");
+            if (
+                (userIdTag == message.tags.allTags.end())
+                || (sscanf(userIdTag->second.c_str(), "%d", &messageInfo.userId) != 1)
+            ) {
+                messageInfo.userId = 0;
+            }
+
+            // Parse channel ID.
+            const auto roomIdTag = message.tags.allTags.find("room-id");
+            if (roomIdTag != message.tags.allTags.end()) {
+                if (sscanf(roomIdTag->second.c_str(), "%d", &messageInfo.channelId) != 1) {
+                    messageInfo.channelId = 0;
+                }
+            }
+
+            // Parse message ID.
+            const auto& messageIdTag = message.tags.allTags.find("id");
+            if (messageIdTag != message.tags.allTags.end()) {
+                messageInfo.messageId = messageIdTag->second;
+            }
+
+            // Parse timestamp.
+            uintmax_t timeAsInt;
+            const auto timestampTag = message.tags.allTags.find("tmi-sent-ts");
+            if (
+                (timestampTag != message.tags.allTags.end())
+                && (sscanf(timestampTag->second.c_str(), "%" SCNuMAX, &timeAsInt) == 1)
+            ) {
+                messageInfo.timestamp = (decltype(messageInfo.timestamp))timeAsInt;
+            } else {
+                messageInfo.timestamp = 0;
+            }
+
+            // Copy tags.
+            messageInfo.tags = message.tags;
+
+            // Trigger callback; if parameter begins with '#', this is a
+            // message sent to the channel; otherwise, it's a private message
+            // to the user.
             if (message.parameters[0][0] == '#') {
-                messageInfo.channel = message.parameters[0].substr(1);
+                messageInfo.channelName = message.parameters[0].substr(1);
                 user->Message(std::move(messageInfo));
             } else {
                 user->PrivateMessage(std::move(messageInfo));
@@ -963,16 +1007,29 @@ namespace Twitch {
          *     This holds information about the server command to handle.
          */
         void HandleServerCommandWhisper(Message&& message) {
-            if (
-                (message.parameters.size() < 2)
-                || (message.parameters[0].length() < 1)
-            ) {
+            // Ignore message unless it at least has a user name and message.
+            if (message.parameters.size() < 2) {
                 return;
             }
+
+            // Extract whisper sender.
             const auto nickname = ExtractNicknameFromPrefix(message.prefix);
             WhisperInfo whisperInfo;
-            whisperInfo.user = nickname;
+            whisperInfo.userName = nickname;
+
+            // Copy whisper message.
             whisperInfo.message = message.parameters[1];
+
+            // Parse user ID.
+            const auto& userIdTag = message.tags.allTags.find("user-id");
+            if (
+                (userIdTag == message.tags.allTags.end())
+                || (sscanf(userIdTag->second.c_str(), "%d", &whisperInfo.userId) != 1)
+            ) {
+                whisperInfo.userId = 0;
+            }
+
+            // Trigger user callback.
             user->Whisper(std::move(whisperInfo));
         }
 

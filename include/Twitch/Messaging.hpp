@@ -94,19 +94,40 @@ namespace Twitch {
             TagsInfo tags;
 
             /**
-             * This is the channel to which the message was sent.
+             * This is the name of the channel to which the message was sent.
              */
-            std::string channel;
+            std::string channelName;
 
             /**
-             * This is the user who sent the message.
+             * This is the ID of the channel to which the message was sent.
              */
-            std::string user;
+            int channelId = 0;
+
+            /**
+             * This is the name of the user who sent the message.
+             */
+            std::string userName;
+
+            /**
+             * This is the ID of the user who sent the message.
+             */
+            int userId = 0;
 
             /**
              * This is the content of the message.
              */
-            std::string message;
+            std::string messageContent;
+
+            /**
+             * This is the ID the message.
+             */
+            std::string messageId;
+
+            /**
+             * This is the time, as expressed in seconds past the UNIX epoch (1
+             * January 1970, Midnight, UTC), when this message was sent.
+             */
+            time_t timestamp = 0;
         };
 
         /**
@@ -114,9 +135,14 @@ namespace Twitch {
          */
         struct WhisperInfo {
             /**
-             * This is the user who sent the message.
+             * This is the name of the user who sent the message.
              */
-            std::string user;
+            std::string userName;
+
+            /**
+             * This is the ID of the user who sent the message.
+             */
+            int userId = 0;
 
             /**
              * This is the content of the message.

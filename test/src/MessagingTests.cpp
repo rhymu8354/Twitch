@@ -1007,9 +1007,9 @@ TEST_F(MessagingTests, ReceiveMessagesNoTagsCapability) {
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitMessages(1));
     ASSERT_EQ(1, user->messages.size());
-    EXPECT_EQ("foobar1125", user->messages[0].channel);
-    EXPECT_EQ("foobar1126", user->messages[0].user);
-    EXPECT_EQ("Hello, World!", user->messages[0].message);
+    EXPECT_EQ("foobar1125", user->messages[0].channelName);
+    EXPECT_EQ("foobar1126", user->messages[0].userName);
+    EXPECT_EQ("Hello, World!", user->messages[0].messageContent);
 }
 
 TEST_F(MessagingTests, ReceiveMessagesWithTagsCapability) {
@@ -1021,13 +1021,18 @@ TEST_F(MessagingTests, ReceiveMessagesWithTagsCapability) {
     // room.
     mockServer->ReturnToClient(
         // tags
-        "@badges=moderator/1,subscriber/12,partner/1;color=#5B99FF;"
+        "@badges=moderator/1,subscriber/12,partner/1;"
+        "color=#5B99FF;"
         "display-name=FooBarMaster;"
         "emotes=30259:6-12,54-60/64138:29-37;"
         "flags=;"
+        "id=1122aa44-55ff-ee88-11cc-1122dd44bb66;"
         "mod=1;"
+        "room-id=12345;"
         "subscriber=1;"
+        "tmi-sent-ts=1539652354185;"
         "turbo=0;"
+        "user-id=54321;"
         "user-type=mod "
 
         // prefix
@@ -1043,9 +1048,13 @@ TEST_F(MessagingTests, ReceiveMessagesWithTagsCapability) {
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitMessages(1));
     ASSERT_EQ(1, user->messages.size());
-    EXPECT_EQ("foobar1125", user->messages[0].channel);
-    EXPECT_EQ("foobar1126", user->messages[0].user);
-    EXPECT_EQ("Hello HeyGuys This is a test SeemsGood Also did I say HeyGuys hello?", user->messages[0].message);
+    EXPECT_EQ("foobar1125", user->messages[0].channelName);
+    EXPECT_EQ(12345, user->messages[0].channelId);
+    EXPECT_EQ("foobar1126", user->messages[0].userName);
+    EXPECT_EQ(54321, user->messages[0].userId);
+    EXPECT_EQ("1122aa44-55ff-ee88-11cc-1122dd44bb66", user->messages[0].messageId);
+    EXPECT_EQ("Hello HeyGuys This is a test SeemsGood Also did I say HeyGuys hello?", user->messages[0].messageContent);
+    EXPECT_EQ(1539652354185, user->messages[0].timestamp);
     EXPECT_EQ("FooBarMaster", user->messages[0].tags.displayName);
     EXPECT_EQ(
         (std::set< std::string >{
@@ -1137,20 +1146,22 @@ TEST_F(MessagingTests, CommandCapabilityNotRequestedWhenNotSupported) {
 }
 
 TEST_F(MessagingTests, ReceiveWhisper) {
-    // Just log in.
+    // Just log in (with tags capability).
     // There's no need to join any channel in order to send/receive whispers.
-    LogIn();
+    LogIn(true);
 
     // Have the pretend Twitch server simulate someone else sending us a
     // whisper.
     mockServer->ReturnToClient(
+        "@badges=;color=;display-name=FooBar1126;emotes=;turbo=0;user-id=12345;user-type= "
         ":foobar1126!foobar1126@foobar1126.tmi.twitch.tv WHISPER foobar1124 :Hello, World!" + CRLF
     );
 
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitWhispers(1));
     ASSERT_EQ(1, user->whispers.size());
-    EXPECT_EQ("foobar1126", user->whispers[0].user);
+    EXPECT_EQ("foobar1126", user->whispers[0].userName);
+    EXPECT_EQ(12345, user->whispers[0].userId);
     EXPECT_EQ("Hello, World!", user->whispers[0].message);
 }
 
@@ -1266,9 +1277,9 @@ TEST_F(MessagingTests, AnonymousConnection) {
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitMessages(1));
     ASSERT_EQ(1, user->messages.size());
-    EXPECT_EQ("foobar1125", user->messages[0].channel);
-    EXPECT_EQ("foobar1126", user->messages[0].user);
-    EXPECT_EQ("Hello, World!", user->messages[0].message);
+    EXPECT_EQ("foobar1125", user->messages[0].channelName);
+    EXPECT_EQ("foobar1126", user->messages[0].userName);
+    EXPECT_EQ("Hello, World!", user->messages[0].messageContent);
 
     // Send a message to the channel we just joined.
     mockServer->ClearLinesReceived();
@@ -1686,6 +1697,6 @@ TEST_F(MessagingTests, ReceivePrivateMessage) {
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitPrivateMessages(1));
     ASSERT_EQ(1, user->privateMessages.size());
-    EXPECT_EQ("jtv", user->privateMessages[0].user);
-    EXPECT_EQ("foobar1126 is now hosting you.", user->privateMessages[0].message);
+    EXPECT_EQ("jtv", user->privateMessages[0].userName);
+    EXPECT_EQ("foobar1126 is now hosting you.", user->privateMessages[0].messageContent);
 }
