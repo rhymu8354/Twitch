@@ -199,7 +199,7 @@ namespace Twitch {
             int parameter;
 
             /**
-             * This is the channel whose membership changed.
+             * This is the channel whose mode changed.
              */
             std::string channelName;
 
@@ -241,12 +241,13 @@ namespace Twitch {
             } type = Type::ClearAll;
 
             /**
-             * This is the channel whose membership changed.
+             * This is the channel in which the ban/timeout/clear occurred.
              */
             std::string channelName;
 
             /**
-             * This is the ID of the channel whose mode changed.
+             * This is the ID of the channel in which the ban/timeout/clear
+             * occurred.
              *
              * NOTE: not available for ClearMessage type.
              */
@@ -298,7 +299,8 @@ namespace Twitch {
 
             /**
              * This is the time, as expressed in seconds past the UNIX epoch (1
-             * January 1970, Midnight, UTC).
+             * January 1970, Midnight, UTC), when this ban/timeout/clear
+             * occurred.
              *
              * NOTE: only applies for types ClearAll, Timeout, and Ban.
              */
