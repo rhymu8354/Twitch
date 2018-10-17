@@ -1866,8 +1866,8 @@ TEST_F(MessagingTests, ReceiveSubNotificationGifted) {
     LogIn(true);
     Join("foobar1125");
 
-    // Have the pretend Twitch server simulate someone else subscribing to the
-    // channel for the first time, or after not being subscribed for a while.
+    // Have the pretend Twitch server simulate someone else gifting a
+    // subscription to another user.
     mockServer->ReturnToClient(
         // tags
         "@badges=subscriber/3;"
@@ -1936,8 +1936,8 @@ TEST_F(MessagingTests, ReceiveSubNotificationMysteryGift) {
     LogIn(true);
     Join("foobar1125");
 
-    // Have the pretend Twitch server simulate someone else subscribing to the
-    // channel for the first time, or after not being subscribed for a while.
+    // Have the pretend Twitch server simulate someone else gifting 3
+    // subscriptions to the community of the channel.
     mockServer->ReturnToClient(
         // tags
         "@badges=subscriber/3;"
