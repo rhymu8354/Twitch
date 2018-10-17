@@ -107,7 +107,7 @@ namespace Twitch {
             /**
              * This is the ID of the channel to which the message was sent.
              */
-            int channelId = 0;
+            uintmax_t channelId = 0;
 
             /**
              * This is the name of the user who sent the message.
@@ -117,7 +117,7 @@ namespace Twitch {
             /**
              * This is the ID of the user who sent the message.
              */
-            int userId = 0;
+            uintmax_t userId = 0;
 
             /**
              * This is the content of the message.
@@ -148,7 +148,7 @@ namespace Twitch {
             /**
              * This is the ID of the user who sent the message.
              */
-            int userId = 0;
+            uintmax_t userId = 0;
 
             /**
              * This is the content of the message.
@@ -253,7 +253,7 @@ namespace Twitch {
             /**
              * This is the ID of the channel whose mode changed.
              */
-            int channelId = 0;
+            uintmax_t channelId = 0;
         };
 
         /**
@@ -298,7 +298,7 @@ namespace Twitch {
              *
              * NOTE: not available for ClearMessage type.
              */
-            int channelId = 0;
+            uintmax_t channelId = 0;
 
             /**
              * This is the name of the user who was timed out or banned.
@@ -312,7 +312,7 @@ namespace Twitch {
              *
              * NOTE: only applies for types Timeout and Ban.
              */
-            int userId = 0;
+            uintmax_t userId = 0;
 
             /**
              * This is a human-readable string meant to convey an explanation
@@ -395,7 +395,7 @@ namespace Twitch {
              *
              * NOTE: This is only provided for the global state notification.
              */
-            int userId = 0;
+            uintmax_t userId = 0;
 
             /**
              * This contains information provided in the message's tags.
@@ -416,7 +416,7 @@ namespace Twitch {
             /**
              * This is the ID of the channel to which the user subscribed.
              */
-            int channelId = 0;
+            uintmax_t channelId = 0;
 
             /**
              * This is the name of the user who subscribed.
@@ -426,7 +426,7 @@ namespace Twitch {
             /**
              * This is the ID of the user who subscribed.
              */
-            int userId = 0;
+            uintmax_t userId = 0;
 
             /**
              * This is the content of any message the user included when they
@@ -456,7 +456,7 @@ namespace Twitch {
              * This is the numerical identifier of the subscription plan chosen
              * by the user.
              */
-            int planId = 0;
+            uintmax_t planId = 0;
 
             /**
              * This contains information provided in the message's tags.

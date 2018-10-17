@@ -936,7 +936,7 @@ namespace Twitch {
             const auto& userIdTag = message.tags.allTags.find("user-id");
             if (
                 (userIdTag == message.tags.allTags.end())
-                || (sscanf(userIdTag->second.c_str(), "%d", &messageInfo.userId) != 1)
+                || (sscanf(userIdTag->second.c_str(), "%" SCNuMAX, &messageInfo.userId) != 1)
             ) {
                 messageInfo.userId = 0;
             }
@@ -944,7 +944,7 @@ namespace Twitch {
             // Parse channel ID.
             const auto roomIdTag = message.tags.allTags.find("room-id");
             if (roomIdTag != message.tags.allTags.end()) {
-                if (sscanf(roomIdTag->second.c_str(), "%d", &messageInfo.channelId) != 1) {
+                if (sscanf(roomIdTag->second.c_str(), "%" SCNuMAX, &messageInfo.channelId) != 1) {
                     messageInfo.channelId = 0;
                 }
             }
@@ -1020,7 +1020,7 @@ namespace Twitch {
             const auto& userIdTag = message.tags.allTags.find("user-id");
             if (
                 (userIdTag == message.tags.allTags.end())
-                || (sscanf(userIdTag->second.c_str(), "%d", &whisperInfo.userId) != 1)
+                || (sscanf(userIdTag->second.c_str(), "%" SCNuMAX, &whisperInfo.userId) != 1)
             ) {
                 whisperInfo.userId = 0;
             }
@@ -1122,7 +1122,7 @@ namespace Twitch {
                     roomModeChange.channelName = message.parameters[0].substr(1);
                     const auto roomIdTag = message.tags.allTags.find("room-id");
                     if (roomIdTag != message.tags.allTags.end()) {
-                        if (sscanf(roomIdTag->second.c_str(), "%d", &roomModeChange.channelId) != 1) {
+                        if (sscanf(roomIdTag->second.c_str(), "%" SCNuMAX, &roomModeChange.channelId) != 1) {
                             roomModeChange.channelId = 0;
                         }
                     }
@@ -1156,7 +1156,7 @@ namespace Twitch {
             clear.channelName = message.parameters[0].substr(1);
             const auto roomIdTag = message.tags.allTags.find("room-id");
             if (roomIdTag != message.tags.allTags.end()) {
-                if (sscanf(roomIdTag->second.c_str(), "%d", &clear.channelId) != 1) {
+                if (sscanf(roomIdTag->second.c_str(), "%" SCNuMAX, &clear.channelId) != 1) {
                     clear.channelId = 0;
                 }
             }
@@ -1173,7 +1173,7 @@ namespace Twitch {
                 const auto& userIdTag = message.tags.allTags.find("target-user-id");
                 if (
                     (userIdTag == message.tags.allTags.end())
-                    || (sscanf(userIdTag->second.c_str(), "%d", &clear.userId) != 1)
+                    || (sscanf(userIdTag->second.c_str(), "%" SCNuMAX, &clear.userId) != 1)
                 ) {
                     clear.userId = 0;
                 }
@@ -1305,7 +1305,7 @@ namespace Twitch {
             const auto& userIdTag = message.tags.allTags.find("user-id");
             if (
                 (userIdTag == message.tags.allTags.end())
-                || (sscanf(userIdTag->second.c_str(), "%d", &userState.userId) != 1)
+                || (sscanf(userIdTag->second.c_str(), "%" SCNuMAX, &userState.userId) != 1)
             ) {
                 userState.userId = 0;
             }
@@ -1376,7 +1376,7 @@ namespace Twitch {
             sub.channelName = message.parameters[0].substr(1);
             const auto roomIdTag = message.tags.allTags.find("room-id");
             if (roomIdTag != message.tags.allTags.end()) {
-                if (sscanf(roomIdTag->second.c_str(), "%d", &sub.channelId) != 1) {
+                if (sscanf(roomIdTag->second.c_str(), "%" SCNuMAX, &sub.channelId) != 1) {
                     sub.channelId = 0;
                 }
             }
@@ -1391,7 +1391,7 @@ namespace Twitch {
             const auto& userIdTag = message.tags.allTags.find("user-id");
             if (
                 (userIdTag == message.tags.allTags.end())
-                || (sscanf(userIdTag->second.c_str(), "%d", &sub.userId) != 1)
+                || (sscanf(userIdTag->second.c_str(), "%" SCNuMAX, &sub.userId) != 1)
             ) {
                 sub.userId = 0;
             }
@@ -1423,7 +1423,7 @@ namespace Twitch {
             const auto& planIdTag = message.tags.allTags.find("msg-param-sub-plan");
             if (
                 (planIdTag == message.tags.allTags.end())
-                || (sscanf(planIdTag->second.c_str(), "%d", &sub.planId) != 1)
+                || (sscanf(planIdTag->second.c_str(), "%" SCNuMAX, &sub.planId) != 1)
             ) {
                 sub.planId = 0;
             }
