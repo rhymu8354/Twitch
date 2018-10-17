@@ -816,6 +816,7 @@ namespace Twitch {
                 {"GLOBALUSERSTATE", &Impl::HandleServerCommandGlobalUserState},
                 {"USERSTATE", &Impl::HandleServerCommandUserState},
                 {"RECONNECT", &Impl::HandleServerCommandReconnect},
+                {"USERNOTICE", &Impl::HandleServerCommandUserNotice},
             };
             dataReceived += action.message;
             Message message;
@@ -1295,6 +1296,98 @@ namespace Twitch {
          */
         void HandleServerCommandReconnect(Message&& message) {
             user->Doom();
+        }
+
+        /**
+         * This method is called to handle the USERNOTICE command from the
+         * Twitch server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandUserNotice(Message&& message) {
+            // Ignore message unless it at least has a channel name.
+            if (
+                (message.parameters.size() < 1)
+                || (message.parameters[0].length() < 2)
+            ) {
+                return;
+            }
+
+            // Parse channel name and ID.
+            SubInfo sub;
+            sub.channelName = message.parameters[0].substr(1);
+            const auto roomIdTag = message.tags.allTags.find("room-id");
+            if (roomIdTag != message.tags.allTags.end()) {
+                if (sscanf(roomIdTag->second.c_str(), "%d", &sub.channelId) != 1) {
+                    sub.channelId = 0;
+                }
+            }
+
+            // Extract user name.
+            const auto& userNameTag = message.tags.allTags.find("login");
+            if (userNameTag != message.tags.allTags.end()) {
+                sub.userName = userNameTag->second;
+            }
+
+            // Parse user ID.
+            const auto& userIdTag = message.tags.allTags.find("user-id");
+            if (
+                (userIdTag == message.tags.allTags.end())
+                || (sscanf(userIdTag->second.c_str(), "%d", &sub.userId) != 1)
+            ) {
+                sub.userId = 0;
+            }
+
+            // Extract user message, if any.
+            if (message.parameters.size() >= 2) {
+                sub.userMessage = message.parameters[1];
+            }
+
+            // Extract system message.
+            const auto& systemMessageTag = message.tags.allTags.find("system-msg");
+            if (systemMessageTag != message.tags.allTags.end()) {
+                sub.systemMessage = UnescapeSpaces(systemMessageTag->second);
+            }
+
+            // Extract subscription type.
+            const auto& subTypeTag = message.tags.allTags.find("msg-id");
+            if (subTypeTag != message.tags.allTags.end()) {
+                sub.type = UnescapeSpaces(subTypeTag->second);
+            }
+
+            // Extract plan name.
+            const auto& planNameTag = message.tags.allTags.find("msg-param-sub-plan-name");
+            if (planNameTag != message.tags.allTags.end()) {
+                sub.planName = UnescapeSpaces(planNameTag->second);
+            }
+
+            // Parse plan ID.
+            const auto& planIdTag = message.tags.allTags.find("msg-param-sub-plan");
+            if (
+                (planIdTag == message.tags.allTags.end())
+                || (sscanf(planIdTag->second.c_str(), "%d", &sub.planId) != 1)
+            ) {
+                sub.planId = 0;
+            }
+
+            // Parse timestamp.
+            uintmax_t timeAsInt;
+            const auto timestampTag = message.tags.allTags.find("tmi-sent-ts");
+            if (
+                (timestampTag != message.tags.allTags.end())
+                && (sscanf(timestampTag->second.c_str(), "%" SCNuMAX, &timeAsInt) == 1)
+            ) {
+                sub.timestamp = (decltype(sub.timestamp))timeAsInt;
+            } else {
+                sub.timestamp = 0;
+            }
+
+            // Copy over the tags.
+            sub.tags = message.tags;
+
+            // Trigger callback to the user.
+            user->Sub(std::move(sub));
         }
 
         /**

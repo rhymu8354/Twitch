@@ -361,6 +361,74 @@ namespace Twitch {
         };
 
         /**
+         * This contains all the information about a user subscription
+         * notification.
+         */
+        struct SubInfo {
+            /**
+             * This is the channel to which the user subscribed.
+             */
+            std::string channelName;
+
+            /**
+             * This is the ID of the channel to which the user subscribed.
+             */
+            int channelId;
+
+            /**
+             * This is the name of the user who subscribed.
+             */
+            std::string userName;
+
+            /**
+             * This is the ID of the user who subscribed.
+             */
+            int userId;
+
+            /**
+             * This is the content of any message the user included when they
+             * subscribed.
+             */
+            std::string userMessage;
+
+            /**
+             * This is the content of any message the system provided when the
+             * user subscribed.
+             */
+            std::string systemMessage;
+
+            /**
+             * This is the type of subscription event.
+             * - sub - new subscription
+             * - resub - subscription renewal.
+             */
+            std::string type;
+
+            /**
+             * This is the name of the subscription plan chosen by the user.
+             */
+            std::string planName;
+
+            /**
+             * This is the numerical identifier of the subscription plan chosen
+             * by the user.
+             */
+            int planId;
+
+            /**
+             * This is the time, as expressed in seconds past the UNIX epoch (1
+             * January 1970, Midnight, UTC), when the subscription notification
+             * was sent.
+             */
+            time_t timestamp = 0;
+
+            /**
+             * This contains information provided in the message's tags.
+             */
+            TagsInfo tags;
+        };
+
+        /**
          * This is a base class and interface to be implemented by the user of
          * this class, in order to receive notifications, events, and other
          * callbacks from the class.
@@ -500,6 +568,17 @@ namespace Twitch {
              *     user state notification.
              */
             virtual void UserState(UserStateInfo&& userStateInfo) {
+            }
+
+            /**
+             * This is called whenever the server provides the user with their
+             * state, either globally, or within the context of a channel.
+             *
+             * @param[in] userStateInfo
+             *     This contains all the information about the received
+             *     user state notification.
+             */
+            virtual void Sub(SubInfo&& subInfo) {
             }
         };
 
