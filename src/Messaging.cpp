@@ -1029,14 +1029,17 @@ namespace Twitch {
          *     This holds information about the server command to handle.
          */
         void HandleServerCommandNotice(Message&& message) {
-            if (
-                (message.parameters.size() < 2)
-                || (message.parameters[0].length() < 1)
-            ) {
+            if (message.parameters.size() < 2) {
                 return;
             }
             const auto& noticeText = message.parameters[1];
-            user->Notice(noticeText);
+            NoticeInfo notice;
+            notice.message = noticeText;
+            const auto& idTag = message.tags.allTags.find("msg-id");
+            if (idTag != message.tags.allTags.end()) {
+                notice.id = idTag->second;
+            }
+            user->Notice(std::move(notice));
             if (
                 !loggedIn
                 && (noticeText == "Login unsuccessful")

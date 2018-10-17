@@ -151,6 +151,21 @@ namespace Twitch {
         };
 
         /**
+         * This contains all the information about a server notice received.
+         */
+        struct NoticeInfo {
+            /**
+             * This is the ID of the message.
+             */
+            std::string id;
+
+            /**
+             * This is the content of the message.
+             */
+            std::string message;
+        };
+
+        /**
          * This contains all the information about a membership command
          * received.
          */
@@ -536,10 +551,11 @@ namespace Twitch {
              * This is called whenever the user receives a notice from the
              * server.
              *
-             * @param[in] message
-             *     This is the text of the server notice message.
+             * @param[in] noticeInfo
+             *     This contains all the information about the received
+             *     server notice.
              */
-            virtual void Notice(const std::string& message) {
+            virtual void Notice(NoticeInfo&& noticeInfo) {
             }
 
             /**

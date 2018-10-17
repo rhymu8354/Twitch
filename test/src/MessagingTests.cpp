@@ -254,7 +254,7 @@ namespace {
         std::vector< Twitch::Messaging::MessageInfo > messages;
         std::vector< Twitch::Messaging::MessageInfo > privateMessages;
         std::vector< Twitch::Messaging::WhisperInfo > whispers;
-        std::vector< std::string > notices;
+        std::vector< Twitch::Messaging::NoticeInfo > notices;
         std::vector< Twitch::Messaging::HostInfo > hosts;
         std::vector< Twitch::Messaging::RoomModeChangeInfo > roomModeChanges;
         std::vector< Twitch::Messaging::ClearInfo > clears;
@@ -462,10 +462,10 @@ namespace {
         }
 
         virtual void Notice(
-            const std::string& message
+            Twitch::Messaging::NoticeInfo&& noticeInfo
         ) override {
             std::lock_guard< std::mutex > lock(mutex);
-            notices.push_back(message);
+            notices.push_back(std::move(noticeInfo));
             wakeCondition.notify_one();
         }
 
@@ -945,7 +945,7 @@ TEST_F(MessagingTests, LogInFailureBadCredentials) {
         mockServer->GetLinesReceived()
     );
     ASSERT_EQ(1, user->notices.size());
-    EXPECT_EQ("Login unsuccessful", user->notices[0]);
+    EXPECT_EQ("Login unsuccessful", user->notices[0].message);
 }
 
 TEST_F(MessagingTests, JoinChannel) {
@@ -1176,19 +1176,20 @@ TEST_F(MessagingTests, SendWhisper) {
 }
 
 TEST_F(MessagingTests, ReceiveGenericNotice) {
-    // Just log in.
+    // Just log in (with tags capability).
     // There's no need to join any channel in order to receive notices.
-    LogIn();
+    LogIn(true);
 
     // Have the pretend Twitch server simulate some kind of generic notice.
     mockServer->ReturnToClient(
-        ":foobar1126!foobar1126@foobar1126.tmi.twitch.tv NOTICE * :Grey is the new black!" + CRLF
+        "@msg-id=fashion :tmi.twitch.tv NOTICE * :Grey is the new black!" + CRLF
     );
 
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitNotices(1));
     ASSERT_EQ(1, user->notices.size());
-    EXPECT_EQ("Grey is the new black!", user->notices[0]);
+    EXPECT_EQ("Grey is the new black!", user->notices[0].message);
+    EXPECT_EQ("fashion", user->notices[0].id);
 }
 
 TEST_F(MessagingTests, SomeoneElseJoinsChannelWeHaveJoined) {
