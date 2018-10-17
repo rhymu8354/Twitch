@@ -501,6 +501,38 @@ namespace Twitch {
         };
 
         /**
+         * This contains all the information about an incoming raid
+         * notification.
+         */
+        struct RaidInfo {
+            /**
+             * This is the channel being raided.
+             */
+            std::string channel;
+
+            /**
+             * This is the name of the user/channel who raided.
+             */
+            std::string raider;
+
+            /**
+             * This is the number of new viewers who are raiding the channel.
+             */
+            size_t viewers = 0;
+
+            /**
+             * This is the content of any message the system provided when the
+             * user subscribed.
+             */
+            std::string systemMessage;
+
+            /**
+             * This contains information provided in the message's tags.
+             */
+            TagsInfo tags;
+        };
+
+        /**
          * This is a base class and interface to be implemented by the user of
          * this class, in order to receive notifications, events, and other
          * callbacks from the class.
@@ -665,6 +697,16 @@ namespace Twitch {
              *     announcement.
              */
             virtual void Sub(SubInfo&& subInfo) {
+            }
+
+            /**
+             * This is called whenever the server announces that raid is coming
+             * into a channel.
+             *
+             * @param[in] raidInfo
+             *     This contains all the information about the incoming raid.
+             */
+            virtual void Raid(RaidInfo&& raidInfo) {
             }
         };
 

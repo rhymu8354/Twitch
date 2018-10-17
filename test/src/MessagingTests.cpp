@@ -268,6 +268,7 @@ namespace {
         std::vector< Twitch::Messaging::ModInfo > mods;
         std::vector< Twitch::Messaging::UserStateInfo > userStates;
         std::vector< Twitch::Messaging::SubInfo > subs;
+        std::vector< Twitch::Messaging::RaidInfo > raids;
         std::condition_variable wakeCondition;
         std::mutex mutex;
 
@@ -408,6 +409,15 @@ namespace {
             );
         }
 
+        bool AwaitRaids(size_t numRaids) {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this, numRaids]{ return raids.size() == numRaids; }
+            );
+        }
+
         // Twitch::Messaging::User
 
         virtual void Doom() override {
@@ -521,6 +531,14 @@ namespace {
         ) override {
             std::lock_guard< std::mutex > lock(mutex);
             subs.push_back(std::move(subInfo));
+            wakeCondition.notify_one();
+        }
+
+        virtual void Raid(
+            Twitch::Messaging::RaidInfo&& raidInfo
+        ) override {
+            std::lock_guard< std::mutex > lock(mutex);
+            raids.push_back(std::move(raidInfo));
             wakeCondition.notify_one();
         }
 
@@ -1995,6 +2013,67 @@ TEST_F(MessagingTests, ReceiveSubNotificationMysteryGift) {
         user->subs[0].tags.badges
     );
     EXPECT_EQ(0x008000, user->subs[0].tags.color);
+}
+
+TEST_F(MessagingTests, ReceiveRaidNotification) {
+    // Log in (with tags capability) and join a channel.
+    LogIn(true);
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate someone else raiding the
+    // channel.
+    mockServer->ReturnToClient(
+        // tags
+        "@badges=subscriber/3;"
+        "color=#008000;"
+        "display-name=FooBar1126;"
+        "emotes=;"
+        "flags=;"
+        "id=11223344-5566-7788-1122-112233445566;"
+        "login=foobar1126;"
+        "mod=0;"
+        "msg-id=raid;"
+        "msg-param-displayName=FooBar1126;"
+        "msg-param-login=foobar1126;"
+        "msg-param-profileImageURL=http://www.example.com/icon.jpg;"
+        "msg-param-viewerCount=1234;"
+        "room-id=12345;"
+        "subscriber=1;"
+        "system-msg=1234\\sraiders\\sfrom\\sFooBar1126\\shave\\sjoined\\n!;"
+        "tmi-sent-ts=1539652354185;"
+        "turbo=0;"
+        "user-id=1122334455;"
+        "user-type= "
+
+        // prefix
+        ":tmi.twitch.tv "
+
+        // command
+        "USERNOTICE "
+
+        // arguments
+        "#foobar1125" + CRLF
+    );
+
+    // Wait for the message to be received.
+    ASSERT_TRUE(user->AwaitRaids(1));
+    ASSERT_EQ(1, user->raids.size());
+    EXPECT_EQ("foobar1125", user->raids[0].channel);
+    EXPECT_EQ("foobar1126", user->raids[0].raider);
+    EXPECT_EQ(1234, user->raids[0].viewers);
+    EXPECT_EQ("1234 raiders from FooBar1126 have joined\n!", user->raids[0].systemMessage);
+    EXPECT_EQ(1122334455, user->raids[0].tags.userId);
+    EXPECT_EQ(12345, user->raids[0].tags.channelId);
+    EXPECT_EQ(1539652354, user->raids[0].tags.timestamp);
+    EXPECT_EQ(185, user->raids[0].tags.timeMilliseconds);
+    EXPECT_EQ("FooBar1126", user->raids[0].tags.displayName);
+    EXPECT_EQ(
+        (std::set< std::string >{
+            "subscriber/3",
+        }),
+        user->raids[0].tags.badges
+    );
+    EXPECT_EQ(0x008000, user->raids[0].tags.color);
 }
 
 TEST_F(MessagingTests, ReceivePrivateMessage) {

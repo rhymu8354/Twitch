@@ -151,26 +151,28 @@ namespace {
     };
 
     /**
-     * This function replaces all instances of "\\s" (single slash followed by
-     * 's' character) with single spaces.
+     * This function replaces all escape sequences in the given string with
+     * their replacements.
      *
      * @note
      *     This really needs to be made generic and moved to the
      *     SystemAbstractions StringExtensions module.
      *
      * @param[in] s
-     *     This is the string which may have spaces to unescape.
+     *     This is the string which may have escape sequences to replace.
      *
      * @return
-     *     The given string, with any escaped spaces unescaped, is returned.
+     *     The given string, with any escaped sequences replaced, is returned.
      */
-    std::string UnescapeSpaces(const std::string& s) {
+    std::string UnescapeMessage(const std::string& s) {
         std::string output;
         bool escape = false;
         for (size_t i = 0; i < s.length(); ++i) {
             if (escape) {
                 if (s[i] == 's') {
                     output += ' ';
+                } else if (s[i] == 'n') {
+                    output += '\n';
                 }
                 escape = false;
             } else if (s[i] == '\\') {
@@ -1153,7 +1155,7 @@ namespace Twitch {
                 // Extract ban/timeout reason, if any.
                 const auto reasonTag = message.tags.allTags.find("ban-reason");
                 if (reasonTag != message.tags.allTags.end()) {
-                    clear.reason = UnescapeSpaces(reasonTag->second);
+                    clear.reason = UnescapeMessage(reasonTag->second);
                 }
 
                 // Check for ban duration; if none, it's a permanent ban,
@@ -1334,119 +1336,159 @@ namespace Twitch {
                 return;
             }
 
-            // Extract channel name.
-            SubInfo sub;
-            sub.channel = message.parameters[0].substr(1);
-
-            // Extract user name.
-            const auto userNameTag = message.tags.allTags.find("login");
-            if (userNameTag != message.tags.allTags.end()) {
-                sub.user = userNameTag->second;
+            // This may be either a raid or a sub notification, based
+            // on the message ID.
+            const auto messageIdTag = message.tags.allTags.find("msg-id");
+            if (messageIdTag == message.tags.allTags.end()) {
+                return;
             }
+            const auto messageId = messageIdTag->second;
+            if (messageId == "raid") {
+                // Extract channel name.
+                RaidInfo raid;
+                raid.channel = message.parameters[0].substr(1);
 
-            // Extract user message, if any.
-            if (message.parameters.size() >= 2) {
-                sub.userMessage = message.parameters[1];
-            }
+                // Extract raider name.
+                const auto userNameTag = message.tags.allTags.find("login");
+                if (userNameTag != message.tags.allTags.end()) {
+                    raid.raider = userNameTag->second;
+                }
 
-            // Extract system message.
-            const auto systemMessageTag = message.tags.allTags.find("system-msg");
-            if (systemMessageTag != message.tags.allTags.end()) {
-                sub.systemMessage = UnescapeSpaces(systemMessageTag->second);
-            }
+                // Extract system message.
+                const auto systemMessageTag = message.tags.allTags.find("system-msg");
+                if (systemMessageTag != message.tags.allTags.end()) {
+                    raid.systemMessage = UnescapeMessage(systemMessageTag->second);
+                }
 
-            // Extract subscription type.
-            const auto subTypeTag = message.tags.allTags.find("msg-id");
-            if (subTypeTag != message.tags.allTags.end()) {
-                const auto& subType = subTypeTag->second;
-                if (subType == "sub") {
-                    sub.type = SubInfo::Type::Sub;
-                } else if (subType == "resub") {
-                    sub.type = SubInfo::Type::Resub;
+                // Parse viewer count.
+                const auto viewerCountTag = message.tags.allTags.find("msg-param-viewerCount");
+                if (
+                    (viewerCountTag == message.tags.allTags.end())
+                    || (sscanf(viewerCountTag->second.c_str(), "%zu", &raid.viewers) != 1)
+                ) {
+                    raid.viewers = 0;
+                }
 
-                    // Parse subscription renewal month count.
-                    const auto monthsIdTag = message.tags.allTags.find("msg-param-months");
-                    if (
-                        (monthsIdTag == message.tags.allTags.end())
-                        || (sscanf(monthsIdTag->second.c_str(), "%zu", &sub.months) != 1)
-                    ) {
-                        sub.months = 0;
-                    }
-                } else if (subType == "subgift") {
-                    sub.type = SubInfo::Type::Gifted;
+                // Copy over the tags.
+                raid.tags = message.tags;
 
-                    // Extract recipient display name.
-                    const auto recipientDisplayNameTag = message.tags.allTags.find("msg-param-recipient-display-name");
-                    if (recipientDisplayNameTag != message.tags.allTags.end()) {
-                        sub.recipientDisplayName = recipientDisplayNameTag->second;
-                    }
+                // Trigger callback to the user.
+                user->Raid(std::move(raid));
+            } else {
+                // Extract channel name.
+                SubInfo sub;
+                sub.channel = message.parameters[0].substr(1);
 
-                    // Extract recipient user name.
-                    const auto recipientUserNameTag = message.tags.allTags.find("msg-param-recipient-user-name");
-                    if (recipientUserNameTag != message.tags.allTags.end()) {
-                        sub.recipientUserName = recipientUserNameTag->second;
-                    }
+                // Extract user name.
+                const auto userNameTag = message.tags.allTags.find("login");
+                if (userNameTag != message.tags.allTags.end()) {
+                    sub.user = userNameTag->second;
+                }
 
-                    // Parse recipient ID.
-                    const auto recipientIdTag = message.tags.allTags.find("msg-param-recipient-id");
-                    if (
-                        (recipientIdTag == message.tags.allTags.end())
-                        || (sscanf(recipientIdTag->second.c_str(), "%" SCNuMAX, &sub.recipientId) != 1)
-                    ) {
-                        sub.recipientId = 0;
-                    }
+                // Extract user message, if any.
+                if (message.parameters.size() >= 2) {
+                    sub.userMessage = message.parameters[1];
+                }
 
-                    // Parse sender gift count.
-                    const auto senderCountTag = message.tags.allTags.find("msg-param-sender-count");
-                    if (
-                        (senderCountTag == message.tags.allTags.end())
-                        || (sscanf(senderCountTag->second.c_str(), "%zu", &sub.senderCount) != 1)
-                    ) {
-                        sub.senderCount = 0;
-                    }
-                } else if (subType == "submysterygift") {
-                    sub.type = SubInfo::Type::MysteryGift;
+                // Extract system message.
+                const auto systemMessageTag = message.tags.allTags.find("system-msg");
+                if (systemMessageTag != message.tags.allTags.end()) {
+                    sub.systemMessage = UnescapeMessage(systemMessageTag->second);
+                }
 
-                    // Parse gift count.
-                    const auto recipientIdTag = message.tags.allTags.find("msg-param-mass-gift-count");
-                    if (
-                        (recipientIdTag == message.tags.allTags.end())
-                        || (sscanf(recipientIdTag->second.c_str(), "%" SCNuMAX, &sub.massGiftCount) != 1)
-                    ) {
-                        sub.massGiftCount = 0;
-                    }
+                // Extract subscription type.
+                const auto subTypeTag = message.tags.allTags.find("msg-id");
+                if (subTypeTag != message.tags.allTags.end()) {
+                    const auto& subType = subTypeTag->second;
+                    if (subType == "sub") {
+                        sub.type = SubInfo::Type::Sub;
+                    } else if (subType == "resub") {
+                        sub.type = SubInfo::Type::Resub;
 
-                    // Parse sender gift count.
-                    const auto senderCountTag = message.tags.allTags.find("msg-param-sender-count");
-                    if (
-                        (senderCountTag == message.tags.allTags.end())
-                        || (sscanf(senderCountTag->second.c_str(), "%zu", &sub.senderCount) != 1)
-                    ) {
-                        sub.senderCount = 0;
+                        // Parse subscription renewal month count.
+                        const auto monthsIdTag = message.tags.allTags.find("msg-param-months");
+                        if (
+                            (monthsIdTag == message.tags.allTags.end())
+                            || (sscanf(monthsIdTag->second.c_str(), "%zu", &sub.months) != 1)
+                        ) {
+                            sub.months = 0;
+                        }
+                    } else if (subType == "subgift") {
+                        sub.type = SubInfo::Type::Gifted;
+
+                        // Extract recipient display name.
+                        const auto recipientDisplayNameTag = message.tags.allTags.find("msg-param-recipient-display-name");
+                        if (recipientDisplayNameTag != message.tags.allTags.end()) {
+                            sub.recipientDisplayName = recipientDisplayNameTag->second;
+                        }
+
+                        // Extract recipient user name.
+                        const auto recipientUserNameTag = message.tags.allTags.find("msg-param-recipient-user-name");
+                        if (recipientUserNameTag != message.tags.allTags.end()) {
+                            sub.recipientUserName = recipientUserNameTag->second;
+                        }
+
+                        // Parse recipient ID.
+                        const auto recipientIdTag = message.tags.allTags.find("msg-param-recipient-id");
+                        if (
+                            (recipientIdTag == message.tags.allTags.end())
+                            || (sscanf(recipientIdTag->second.c_str(), "%" SCNuMAX, &sub.recipientId) != 1)
+                        ) {
+                            sub.recipientId = 0;
+                        }
+
+                        // Parse sender gift count.
+                        const auto senderCountTag = message.tags.allTags.find("msg-param-sender-count");
+                        if (
+                            (senderCountTag == message.tags.allTags.end())
+                            || (sscanf(senderCountTag->second.c_str(), "%zu", &sub.senderCount) != 1)
+                        ) {
+                            sub.senderCount = 0;
+                        }
+                    } else if (subType == "submysterygift") {
+                        sub.type = SubInfo::Type::MysteryGift;
+
+                        // Parse gift count.
+                        const auto recipientIdTag = message.tags.allTags.find("msg-param-mass-gift-count");
+                        if (
+                            (recipientIdTag == message.tags.allTags.end())
+                            || (sscanf(recipientIdTag->second.c_str(), "%" SCNuMAX, &sub.massGiftCount) != 1)
+                        ) {
+                            sub.massGiftCount = 0;
+                        }
+
+                        // Parse sender gift count.
+                        const auto senderCountTag = message.tags.allTags.find("msg-param-sender-count");
+                        if (
+                            (senderCountTag == message.tags.allTags.end())
+                            || (sscanf(senderCountTag->second.c_str(), "%zu", &sub.senderCount) != 1)
+                        ) {
+                            sub.senderCount = 0;
+                        }
                     }
                 }
+
+                // Extract plan name.
+                const auto planNameTag = message.tags.allTags.find("msg-param-sub-plan-name");
+                if (planNameTag != message.tags.allTags.end()) {
+                    sub.planName = UnescapeMessage(planNameTag->second);
+                }
+
+                // Parse plan ID.
+                const auto planIdTag = message.tags.allTags.find("msg-param-sub-plan");
+                if (
+                    (planIdTag == message.tags.allTags.end())
+                    || (sscanf(planIdTag->second.c_str(), "%" SCNuMAX, &sub.planId) != 1)
+                ) {
+                    sub.planId = 0;
+                }
+
+                // Copy over the tags.
+                sub.tags = message.tags;
+
+                // Trigger callback to the user.
+                user->Sub(std::move(sub));
             }
-
-            // Extract plan name.
-            const auto planNameTag = message.tags.allTags.find("msg-param-sub-plan-name");
-            if (planNameTag != message.tags.allTags.end()) {
-                sub.planName = UnescapeSpaces(planNameTag->second);
-            }
-
-            // Parse plan ID.
-            const auto planIdTag = message.tags.allTags.find("msg-param-sub-plan");
-            if (
-                (planIdTag == message.tags.allTags.end())
-                || (sscanf(planIdTag->second.c_str(), "%" SCNuMAX, &sub.planId) != 1)
-            ) {
-                sub.planId = 0;
-            }
-
-            // Copy over the tags.
-            sub.tags = message.tags;
-
-            // Trigger callback to the user.
-            user->Sub(std::move(sub));
         }
 
         /**
