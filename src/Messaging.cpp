@@ -173,6 +173,10 @@ namespace {
                     output += ' ';
                 } else if (s[i] == 'n') {
                     output += '\n';
+                } else if (s[i] == ':') {
+                    output += ';';
+                } else if (s[i] == '\\') {
+                    output += '\\';
                 }
                 escape = false;
             } else if (s[i] == '\\') {

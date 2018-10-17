@@ -1581,6 +1581,24 @@ TEST_F(MessagingTests, TimeoutUser) {
     EXPECT_EQ(185, user->clears[0].tags.timeMilliseconds);
 }
 
+TEST_F(MessagingTests, TimeoutUserWithSpecialCharactersInReason) {
+    // Log in (with tags capability) and join a channel.
+    LogIn(true);
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate the condition where someone is
+    // timed out by a moderator.
+    mockServer->ReturnToClient(
+        "@ban-duration=1;ban-reason=just\\sa\\stest:\\sthis=test\\:\\sbackslash:\\s\\\\\\s\\sdouble:\\s\\\\\\\\\\shello,\\sworld!;room-id=12345;target-user-id=1122334455;tmi-sent-ts=1539652354185 "
+        ":tmi.twitch.tv CLEARCHAT #foobar1125 :foobar1126" + CRLF
+    );
+
+    // Wait to be notified about the clear.
+    ASSERT_TRUE(user->AwaitClears(1));
+    ASSERT_EQ(1, user->clears.size());
+    EXPECT_EQ("just a test: this=test; backslash: \\  double: \\\\ hello, world!", user->clears[0].reason);
+}
+
 TEST_F(MessagingTests, BanUser) {
     // Log in (with tags capability) and join a channel.
     LogIn(true);

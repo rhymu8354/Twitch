@@ -11,6 +11,7 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <SystemAbstractions/StringExtensions.hpp>
+#include <utility>
 
 namespace {
 
@@ -19,6 +20,36 @@ namespace {
      * sent to or from Twitch chat servers.
      */
     const std::string CRLF = "\r\n";
+
+    /**
+     * This function breaks the given string into two strings at the first
+     * position of an unescaped equal sign.
+     *
+     * @param[in] s
+     *     This is the string to split.
+     *
+     * @return
+     *     The two pieces of the input string on either side of the first
+     *     unescaped equal sign is returned.
+     */
+    std::pair< std::string, std::string > SplitNameValue(const std::string& s) {
+        bool escape = false;
+        for (size_t i = 0; i < s.length(); ++i) {
+            if (escape) {
+                escape = false;
+            } else {
+                if (s[i] == '\\') {
+                    escape = true;
+                } else if (s[i] == '=') {
+                    return {
+                        s.substr(0, i),
+                        s.substr(i + 1)
+                    };
+                }
+            }
+        }
+        return {s, ""};
+    }
 
     /**
      * This is a helper function which parses the tags string from a raw Twitch
@@ -34,12 +65,9 @@ namespace {
         Twitch::Messaging::TagsInfo parsedTags;
         const auto tags = SystemAbstractions::Split(unparsedTags, ';');
         for (const auto& tag: tags) {
-            const auto nameValuePair = SystemAbstractions::Split(tag, '=');
-            if (nameValuePair.size() != 2) {
-                continue;
-            }
-            const auto& name = nameValuePair[0];
-            const auto& value = nameValuePair[1];
+            const auto nameValuePair = SplitNameValue(tag);
+            const auto& name = nameValuePair.first;
+            const auto& value = nameValuePair.second;
             parsedTags.allTags[name] = value;
             if (name == "badges") {
                 const auto badges = SystemAbstractions::Split(value, ',');
