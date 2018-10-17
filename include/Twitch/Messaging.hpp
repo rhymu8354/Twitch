@@ -76,6 +76,12 @@ namespace Twitch {
             uint32_t color = 0xFFFFFF;
 
             /**
+             * This is the time, as expressed in seconds past the UNIX epoch (1
+             * January 1970, Midnight, UTC), when this message was sent.
+             */
+            time_t timestamp = 0;
+
+            /**
              * This holds a copy of the names and values of all the tags,
              * including both the ones known about by the parser (above) as
              * well as those not known.
@@ -122,12 +128,6 @@ namespace Twitch {
              * This is the ID the message.
              */
             std::string messageId;
-
-            /**
-             * This is the time, as expressed in seconds past the UNIX epoch (1
-             * January 1970, Midnight, UTC), when this message was sent.
-             */
-            time_t timestamp = 0;
         };
 
         /**
@@ -324,13 +324,9 @@ namespace Twitch {
             size_t duration = 0;
 
             /**
-             * This is the time, as expressed in seconds past the UNIX epoch (1
-             * January 1970, Midnight, UTC), when this ban/timeout/clear
-             * occurred.
-             *
-             * NOTE: only applies for types ClearAll, Timeout, and Ban.
+             * This contains information provided in the message's tags.
              */
-            time_t timestamp = 0;
+            TagsInfo tags;
         };
 
         /**
@@ -440,13 +436,6 @@ namespace Twitch {
              * by the user.
              */
             int planId = 0;
-
-            /**
-             * This is the time, as expressed in seconds past the UNIX epoch (1
-             * January 1970, Midnight, UTC), when the subscription notification
-             * was sent.
-             */
-            time_t timestamp = 0;
 
             /**
              * This contains information provided in the message's tags.

@@ -75,6 +75,13 @@ namespace {
                         emoteInstances.push_back({begin, end});
                     }
                 }
+            } else if (name == "tmi-sent-ts") {
+                uintmax_t timeAsInt;
+                if (sscanf(value.c_str(), "%" SCNuMAX, &timeAsInt) == 1) {
+                    parsedTags.timestamp = (decltype(parsedTags.timestamp))timeAsInt;
+                } else {
+                    parsedTags.timestamp = 0;
+                }
             }
         }
         return parsedTags;

@@ -1054,7 +1054,7 @@ TEST_F(MessagingTests, ReceiveMessagesWithTagsCapability) {
     EXPECT_EQ(54321, user->messages[0].userId);
     EXPECT_EQ("1122aa44-55ff-ee88-11cc-1122dd44bb66", user->messages[0].messageId);
     EXPECT_EQ("Hello HeyGuys This is a test SeemsGood Also did I say HeyGuys hello?", user->messages[0].messageContent);
-    EXPECT_EQ(1539652354185, user->messages[0].timestamp);
+    EXPECT_EQ(1539652354185, user->messages[0].tags.timestamp);
     EXPECT_EQ("FooBarMaster", user->messages[0].tags.displayName);
     EXPECT_EQ(
         (std::set< std::string >{
@@ -1448,7 +1448,7 @@ TEST_F(MessagingTests, TimeoutUser) {
     EXPECT_EQ("Not funny", user->clears[0].reason);
     EXPECT_EQ(1, user->clears[0].duration);
     EXPECT_EQ(1122334455, user->clears[0].userId);
-    EXPECT_EQ(1539652354185, user->clears[0].timestamp);
+    EXPECT_EQ(1539652354185, user->clears[0].tags.timestamp);
 }
 
 TEST_F(MessagingTests, BanUser) {
@@ -1472,7 +1472,7 @@ TEST_F(MessagingTests, BanUser) {
     EXPECT_EQ("foobar1126", user->clears[0].userName);
     EXPECT_EQ("Was a dick", user->clears[0].reason);
     EXPECT_EQ(1122334455, user->clears[0].userId);
-    EXPECT_EQ(1539652354185, user->clears[0].timestamp);
+    EXPECT_EQ(1539652354185, user->clears[0].tags.timestamp);
 }
 
 TEST_F(MessagingTests, ClearAll) {
@@ -1493,7 +1493,7 @@ TEST_F(MessagingTests, ClearAll) {
     EXPECT_EQ(Twitch::Messaging::ClearInfo::Type::ClearAll, user->clears[0].type);
     EXPECT_EQ(12345, user->clears[0].channelId);
     EXPECT_EQ("foobar1125", user->clears[0].channelName);
-    EXPECT_EQ(1539652354185, user->clears[0].timestamp);
+    EXPECT_EQ(1539652354185, user->clears[0].tags.timestamp);
 }
 
 TEST_F(MessagingTests, ClearMessage) {
@@ -1672,7 +1672,7 @@ TEST_F(MessagingTests, ReceiveSubNotification) {
     EXPECT_EQ("resub", user->subs[0].type);
     EXPECT_EQ("The PogChamp Plan", user->subs[0].planName);
     EXPECT_EQ(1000, user->subs[0].planId);
-    EXPECT_EQ(1539652354185, user->subs[0].timestamp);
+    EXPECT_EQ(1539652354185, user->subs[0].tags.timestamp);
     EXPECT_EQ("FooBar1126", user->subs[0].tags.displayName);
     EXPECT_EQ(
         (std::set< std::string >{

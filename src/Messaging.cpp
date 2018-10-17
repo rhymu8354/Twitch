@@ -955,18 +955,6 @@ namespace Twitch {
                 messageInfo.messageId = messageIdTag->second;
             }
 
-            // Parse timestamp.
-            uintmax_t timeAsInt;
-            const auto timestampTag = message.tags.allTags.find("tmi-sent-ts");
-            if (
-                (timestampTag != message.tags.allTags.end())
-                && (sscanf(timestampTag->second.c_str(), "%" SCNuMAX, &timeAsInt) == 1)
-            ) {
-                messageInfo.timestamp = (decltype(messageInfo.timestamp))timeAsInt;
-            } else {
-                messageInfo.timestamp = 0;
-            }
-
             // Copy tags.
             messageInfo.tags = message.tags;
 
@@ -1159,18 +1147,6 @@ namespace Twitch {
                 }
             }
 
-            // Parse timestamp.
-            uintmax_t timeAsInt;
-            const auto timestampTag = message.tags.allTags.find("tmi-sent-ts");
-            if (
-                (timestampTag != message.tags.allTags.end())
-                && (sscanf(timestampTag->second.c_str(), "%" SCNuMAX, &timeAsInt) == 1)
-            ) {
-                clear.timestamp = (decltype(clear.timestamp))timeAsInt;
-            } else {
-                clear.timestamp = 0;
-            }
-
             // Interpret as clear-all or timeout/ban based on whether or not
             // there is an additional parameter (the target name).
             if (message.parameters.size() == 1) {
@@ -1208,6 +1184,9 @@ namespace Twitch {
                     }
                 }
             }
+
+            // Copy message tags.
+            clear.tags = message.tags;
 
             // Trigger callback to the user.
             user->Clear(std::move(clear));
@@ -1248,6 +1227,9 @@ namespace Twitch {
             if (userNameTag != message.tags.allTags.end()) {
                 clear.userName = userNameTag->second;
             }
+
+            // Copy message tags.
+            clear.tags = message.tags;
 
             // Trigger callback to the user.
             user->Clear(std::move(clear));
@@ -1430,18 +1412,6 @@ namespace Twitch {
                 || (sscanf(planIdTag->second.c_str(), "%d", &sub.planId) != 1)
             ) {
                 sub.planId = 0;
-            }
-
-            // Parse timestamp.
-            uintmax_t timeAsInt;
-            const auto timestampTag = message.tags.allTags.find("tmi-sent-ts");
-            if (
-                (timestampTag != message.tags.allTags.end())
-                && (sscanf(timestampTag->second.c_str(), "%" SCNuMAX, &timeAsInt) == 1)
-            ) {
-                sub.timestamp = (decltype(sub.timestamp))timeAsInt;
-            } else {
-                sub.timestamp = 0;
             }
 
             // Copy over the tags.
