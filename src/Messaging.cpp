@@ -956,14 +956,6 @@ namespace Twitch {
                 messageInfo.userId = 0;
             }
 
-            // Parse channel ID.
-            const auto roomIdTag = message.tags.allTags.find("room-id");
-            if (roomIdTag != message.tags.allTags.end()) {
-                if (sscanf(roomIdTag->second.c_str(), "%" SCNuMAX, &messageInfo.channelId) != 1) {
-                    messageInfo.channelId = 0;
-                }
-            }
-
             // Parse message ID.
             const auto messageIdTag = message.tags.allTags.find("id");
             if (messageIdTag != message.tags.allTags.end()) {
@@ -1135,12 +1127,7 @@ namespace Twitch {
                 if (modeTag != message.tags.allTags.end()) {
                     RoomModeChangeInfo roomModeChange;
                     roomModeChange.channelName = message.parameters[0].substr(1);
-                    const auto roomIdTag = message.tags.allTags.find("room-id");
-                    if (roomIdTag != message.tags.allTags.end()) {
-                        if (sscanf(roomIdTag->second.c_str(), "%" SCNuMAX, &roomModeChange.channelId) != 1) {
-                            roomModeChange.channelId = 0;
-                        }
-                    }
+                    roomModeChange.channelId = message.tags.channelId;
                     roomModeChange.mode = mode;
                     if (sscanf(modeTag->second.c_str(), "%d", &roomModeChange.parameter) != 1) {
                         roomModeChange.parameter = 0;
@@ -1166,15 +1153,9 @@ namespace Twitch {
                 return;
             }
 
-            // Parse channel name and ID.
+            // Extract channel name.
             ClearInfo clear;
             clear.channelName = message.parameters[0].substr(1);
-            const auto roomIdTag = message.tags.allTags.find("room-id");
-            if (roomIdTag != message.tags.allTags.end()) {
-                if (sscanf(roomIdTag->second.c_str(), "%" SCNuMAX, &clear.channelId) != 1) {
-                    clear.channelId = 0;
-                }
-            }
 
             // Interpret as clear-all or timeout/ban based on whether or not
             // there is an additional parameter (the target name).
@@ -1386,15 +1367,9 @@ namespace Twitch {
                 return;
             }
 
-            // Parse channel name and ID.
+            // Extract channel name.
             SubInfo sub;
             sub.channelName = message.parameters[0].substr(1);
-            const auto roomIdTag = message.tags.allTags.find("room-id");
-            if (roomIdTag != message.tags.allTags.end()) {
-                if (sscanf(roomIdTag->second.c_str(), "%" SCNuMAX, &sub.channelId) != 1) {
-                    sub.channelId = 0;
-                }
-            }
 
             // Extract user name.
             const auto userNameTag = message.tags.allTags.find("login");

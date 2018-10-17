@@ -84,6 +84,10 @@ namespace {
                     parsedTags.timestamp = 0;
                     parsedTags.timeMilliseconds = 0;
                 }
+            } else if (name == "room-id") {
+                if (sscanf(value.c_str(), "%" SCNuMAX, &parsedTags.channelId) != 1) {
+                    parsedTags.channelId = 0;
+                }
             }
         }
         return parsedTags;

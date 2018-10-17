@@ -89,6 +89,11 @@ namespace Twitch {
             unsigned int timeMilliseconds = 0;
 
             /**
+             * This is the ID of the channel to which the message was sent.
+             */
+            uintmax_t channelId = 0;
+
+            /**
              * This holds a copy of the names and values of all the tags,
              * including both the ones known about by the parser (above) as
              * well as those not known.
@@ -110,11 +115,6 @@ namespace Twitch {
              * This is the name of the channel to which the message was sent.
              */
             std::string channelName;
-
-            /**
-             * This is the ID of the channel to which the message was sent.
-             */
-            uintmax_t channelId = 0;
 
             /**
              * This is the name of the user who sent the message.
@@ -300,14 +300,6 @@ namespace Twitch {
             std::string channelName;
 
             /**
-             * This is the ID of the channel in which the ban/timeout/clear
-             * occurred.
-             *
-             * NOTE: not available for ClearMessage type.
-             */
-            uintmax_t channelId = 0;
-
-            /**
              * This is the name of the user who was timed out or banned.
              *
              * NOTE: only applies for types Timeout and Ban.
@@ -451,11 +443,6 @@ namespace Twitch {
              * This is the channel to which the user subscribed.
              */
             std::string channelName;
-
-            /**
-             * This is the ID of the channel to which the user subscribed.
-             */
-            uintmax_t channelId = 0;
 
             /**
              * This is the name of the user who subscribed.
