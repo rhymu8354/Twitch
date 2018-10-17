@@ -529,7 +529,7 @@ namespace Twitch {
 
             /**
              * This is the content of any message the system provided when the
-             * user subscribed.
+             * raid happened.
              */
             std::string systemMessage;
 
