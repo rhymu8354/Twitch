@@ -942,7 +942,7 @@ namespace Twitch {
             // Extract user name from message prefix.
             MessageInfo messageInfo;
             const auto nickname = ExtractNicknameFromPrefix(message.prefix);
-            messageInfo.userName = nickname;
+            messageInfo.user = nickname;
 
             // Copy message content.
             messageInfo.messageContent = message.parameters[1];
@@ -968,7 +968,7 @@ namespace Twitch {
             // message sent to the channel; otherwise, it's a private message
             // to the user.
             if (message.parameters[0][0] == '#') {
-                messageInfo.channelName = message.parameters[0].substr(1);
+                messageInfo.channel = message.parameters[0].substr(1);
                 user->Message(std::move(messageInfo));
             } else {
                 user->PrivateMessage(std::move(messageInfo));
@@ -1009,7 +1009,7 @@ namespace Twitch {
             // Extract whisper sender.
             const auto nickname = ExtractNicknameFromPrefix(message.prefix);
             WhisperInfo whisperInfo;
-            whisperInfo.userName = nickname;
+            whisperInfo.user = nickname;
 
             // Copy whisper message.
             whisperInfo.message = message.parameters[1];
@@ -1140,7 +1140,7 @@ namespace Twitch {
 
             // Extract channel name.
             ClearInfo clear;
-            clear.channelName = message.parameters[0].substr(1);
+            clear.channel = message.parameters[0].substr(1);
 
             // Interpret as clear-all or timeout/ban based on whether or not
             // there is an additional parameter (the target name).
@@ -1148,7 +1148,7 @@ namespace Twitch {
                 clear.type = ClearInfo::Type::ClearAll;
             } else {
                 // Extract user name.
-                clear.userName = message.parameters[1];
+                clear.user = message.parameters[1];
 
                 // Extract ban/timeout reason, if any.
                 const auto reasonTag = message.tags.allTags.find("ban-reason");
@@ -1197,7 +1197,7 @@ namespace Twitch {
             // Parse channel name.
             ClearInfo clear;
             clear.type = ClearInfo::Type::ClearMessage;
-            clear.channelName = message.parameters[0].substr(1);
+            clear.channel = message.parameters[0].substr(1);
 
             // Extract offending message content.
             clear.offendingMessageContent = message.parameters[1];
@@ -1211,7 +1211,7 @@ namespace Twitch {
             // Extract user name.
             const auto userNameTag = message.tags.allTags.find("login");
             if (userNameTag != message.tags.allTags.end()) {
-                clear.userName = userNameTag->second;
+                clear.user = userNameTag->second;
             }
 
             // Copy message tags.
@@ -1336,12 +1336,12 @@ namespace Twitch {
 
             // Extract channel name.
             SubInfo sub;
-            sub.channelName = message.parameters[0].substr(1);
+            sub.channel = message.parameters[0].substr(1);
 
             // Extract user name.
             const auto userNameTag = message.tags.allTags.find("login");
             if (userNameTag != message.tags.allTags.end()) {
-                sub.userName = userNameTag->second;
+                sub.user = userNameTag->second;
             }
 
             // Extract user message, if any.

@@ -119,12 +119,12 @@ namespace Twitch {
             /**
              * This is the name of the channel to which the message was sent.
              */
-            std::string channelName;
+            std::string channel;
 
             /**
              * This is the name of the user who sent the message.
              */
-            std::string userName;
+            std::string user;
 
             /**
              * This is the content of the message.
@@ -155,7 +155,7 @@ namespace Twitch {
             /**
              * This is the name of the user who sent the message.
              */
-            std::string userName;
+            std::string user;
 
             /**
              * This is the content of the message.
@@ -297,14 +297,14 @@ namespace Twitch {
             /**
              * This is the channel in which the ban/timeout/clear occurred.
              */
-            std::string channelName;
+            std::string channel;
 
             /**
              * This is the name of the user who was timed out or banned.
              *
              * NOTE: only applies for types Timeout and Ban.
              */
-            std::string userName;
+            std::string user;
 
             /**
              * This is a human-readable string meant to convey an explanation
@@ -428,12 +428,12 @@ namespace Twitch {
             /**
              * This is the channel to which the user subscribed.
              */
-            std::string channelName;
+            std::string channel;
 
             /**
              * This is the name of the user who subscribed.
              */
-            std::string userName;
+            std::string user;
 
             /**
              * This is the display name of the user who received the sub, if it

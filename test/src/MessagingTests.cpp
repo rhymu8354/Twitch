@@ -1045,8 +1045,8 @@ TEST_F(MessagingTests, ReceiveMessagesNoTagsCapability) {
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitMessages(1));
     ASSERT_EQ(1, user->messages.size());
-    EXPECT_EQ("foobar1125", user->messages[0].channelName);
-    EXPECT_EQ("foobar1126", user->messages[0].userName);
+    EXPECT_EQ("foobar1125", user->messages[0].channel);
+    EXPECT_EQ("foobar1126", user->messages[0].user);
     EXPECT_EQ("Hello, World!", user->messages[0].messageContent);
 }
 
@@ -1086,8 +1086,8 @@ TEST_F(MessagingTests, ReceiveMessagesWithTagsCapabilityNoBits) {
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitMessages(1));
     ASSERT_EQ(1, user->messages.size());
-    EXPECT_EQ("foobar1125", user->messages[0].channelName);
-    EXPECT_EQ("foobar1126", user->messages[0].userName);
+    EXPECT_EQ("foobar1125", user->messages[0].channel);
+    EXPECT_EQ("foobar1126", user->messages[0].user);
     EXPECT_EQ("1122aa44-55ff-ee88-11cc-1122dd44bb66", user->messages[0].messageId);
     EXPECT_EQ("Hello HeyGuys This is a test SeemsGood Also did I say HeyGuys hello?", user->messages[0].messageContent);
     EXPECT_EQ(54321, user->messages[0].tags.userId);
@@ -1151,8 +1151,8 @@ TEST_F(MessagingTests, ReceiveMessagesWithTagsCapabilityWithBits) {
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitMessages(1));
     ASSERT_EQ(1, user->messages.size());
-    EXPECT_EQ("foobar1125", user->messages[0].channelName);
-    EXPECT_EQ("foobar1126", user->messages[0].userName);
+    EXPECT_EQ("foobar1125", user->messages[0].channel);
+    EXPECT_EQ("foobar1126", user->messages[0].user);
     EXPECT_EQ("1122aa44-55ff-ee88-11cc-1122dd44bb66", user->messages[0].messageId);
     EXPECT_EQ("cheer100 Grats!", user->messages[0].messageContent);
     EXPECT_EQ(54321, user->messages[0].tags.userId);
@@ -1263,7 +1263,7 @@ TEST_F(MessagingTests, ReceiveWhisper) {
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitWhispers(1));
     ASSERT_EQ(1, user->whispers.size());
-    EXPECT_EQ("foobar1126", user->whispers[0].userName);
+    EXPECT_EQ("foobar1126", user->whispers[0].user);
     EXPECT_EQ("Hello, World!", user->whispers[0].message);
     EXPECT_EQ(12345, user->whispers[0].tags.userId);
 }
@@ -1384,8 +1384,8 @@ TEST_F(MessagingTests, AnonymousConnection) {
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitMessages(1));
     ASSERT_EQ(1, user->messages.size());
-    EXPECT_EQ("foobar1125", user->messages[0].channelName);
-    EXPECT_EQ("foobar1126", user->messages[0].userName);
+    EXPECT_EQ("foobar1125", user->messages[0].channel);
+    EXPECT_EQ("foobar1126", user->messages[0].user);
     EXPECT_EQ("Hello, World!", user->messages[0].messageContent);
 
     // Send a message to the channel we just joined.
@@ -1553,8 +1553,8 @@ TEST_F(MessagingTests, TimeoutUser) {
     ASSERT_TRUE(user->AwaitClears(1));
     ASSERT_EQ(1, user->clears.size());
     EXPECT_EQ(Twitch::Messaging::ClearInfo::Type::Timeout, user->clears[0].type);
-    EXPECT_EQ("foobar1125", user->clears[0].channelName);
-    EXPECT_EQ("foobar1126", user->clears[0].userName);
+    EXPECT_EQ("foobar1125", user->clears[0].channel);
+    EXPECT_EQ("foobar1126", user->clears[0].user);
     EXPECT_EQ("Not funny", user->clears[0].reason);
     EXPECT_EQ(1, user->clears[0].duration);
     EXPECT_EQ(1122334455, user->clears[0].tags.userId);
@@ -1579,8 +1579,8 @@ TEST_F(MessagingTests, BanUser) {
     ASSERT_TRUE(user->AwaitClears(1));
     ASSERT_EQ(1, user->clears.size());
     EXPECT_EQ(Twitch::Messaging::ClearInfo::Type::Ban, user->clears[0].type);
-    EXPECT_EQ("foobar1125", user->clears[0].channelName);
-    EXPECT_EQ("foobar1126", user->clears[0].userName);
+    EXPECT_EQ("foobar1125", user->clears[0].channel);
+    EXPECT_EQ("foobar1126", user->clears[0].user);
     EXPECT_EQ("Was a dick", user->clears[0].reason);
     EXPECT_EQ(1122334455, user->clears[0].tags.userId);
     EXPECT_EQ(12345, user->clears[0].tags.channelId);
@@ -1604,7 +1604,7 @@ TEST_F(MessagingTests, ClearAll) {
     ASSERT_TRUE(user->AwaitClears(1));
     ASSERT_EQ(1, user->clears.size());
     EXPECT_EQ(Twitch::Messaging::ClearInfo::Type::ClearAll, user->clears[0].type);
-    EXPECT_EQ("foobar1125", user->clears[0].channelName);
+    EXPECT_EQ("foobar1125", user->clears[0].channel);
     EXPECT_EQ(12345, user->clears[0].tags.channelId);
     EXPECT_EQ(1539652354, user->clears[0].tags.timestamp);
     EXPECT_EQ(185, user->clears[0].tags.timeMilliseconds);
@@ -1626,8 +1626,8 @@ TEST_F(MessagingTests, ClearMessage) {
     ASSERT_TRUE(user->AwaitClears(1));
     ASSERT_EQ(1, user->clears.size());
     EXPECT_EQ(Twitch::Messaging::ClearInfo::Type::ClearMessage, user->clears[0].type);
-    EXPECT_EQ("foobar1125", user->clears[0].channelName);
-    EXPECT_EQ("foobar1126", user->clears[0].userName);
+    EXPECT_EQ("foobar1125", user->clears[0].channel);
+    EXPECT_EQ("foobar1126", user->clears[0].user);
     EXPECT_EQ("Don't ban me, bro!", user->clears[0].offendingMessageContent);
     EXPECT_EQ("11223344-5566-7788-1122-112233445566", user->clears[0].offendingMessageId);
 }
@@ -1777,8 +1777,8 @@ TEST_F(MessagingTests, ReceiveSubNotificationResub) {
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitSubs(1));
     ASSERT_EQ(1, user->subs.size());
-    EXPECT_EQ("foobar1125", user->subs[0].channelName);
-    EXPECT_EQ("foobar1126", user->subs[0].userName);
+    EXPECT_EQ("foobar1125", user->subs[0].channel);
+    EXPECT_EQ("foobar1126", user->subs[0].user);
     EXPECT_EQ("Is this all I get for subbing to your channel?  FeelsBadMan", user->subs[0].userMessage);
     EXPECT_EQ("foobar1126 just subscribed with a Tier 1 sub. foobar1126 subscribed for 4 months in a row!", user->subs[0].systemMessage);
     EXPECT_EQ(Twitch::Messaging::SubInfo::Type::Resub, user->subs[0].type);
@@ -1840,8 +1840,8 @@ TEST_F(MessagingTests, ReceiveSubNotificationNewSub) {
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitSubs(1));
     ASSERT_EQ(1, user->subs.size());
-    EXPECT_EQ("foobar1125", user->subs[0].channelName);
-    EXPECT_EQ("foobar1126", user->subs[0].userName);
+    EXPECT_EQ("foobar1125", user->subs[0].channel);
+    EXPECT_EQ("foobar1126", user->subs[0].user);
     EXPECT_EQ("Is this all I get for subbing to your channel?  FeelsBadMan", user->subs[0].userMessage);
     EXPECT_EQ("foobar1126 just subscribed with a Tier 1 sub. foobar1126 subscribed for 4 months in a row!", user->subs[0].systemMessage);
     EXPECT_EQ(Twitch::Messaging::SubInfo::Type::Sub, user->subs[0].type);
@@ -1907,8 +1907,8 @@ TEST_F(MessagingTests, ReceiveSubNotificationGifted) {
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitSubs(1));
     ASSERT_EQ(1, user->subs.size());
-    EXPECT_EQ("foobar1125", user->subs[0].channelName);
-    EXPECT_EQ("foobar1126", user->subs[0].userName);
+    EXPECT_EQ("foobar1125", user->subs[0].channel);
+    EXPECT_EQ("foobar1126", user->subs[0].user);
     EXPECT_EQ("", user->subs[0].userMessage);
     EXPECT_EQ("foobar1126 gifted a Tier 1 sub to FooBar1124! They have given 3 Gift Subs in the channel!", user->subs[0].systemMessage);
     EXPECT_EQ(Twitch::Messaging::SubInfo::Type::Gifted, user->subs[0].type);
@@ -1975,8 +1975,8 @@ TEST_F(MessagingTests, ReceiveSubNotificationMysteryGift) {
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitSubs(1));
     ASSERT_EQ(1, user->subs.size());
-    EXPECT_EQ("foobar1125", user->subs[0].channelName);
-    EXPECT_EQ("foobar1126", user->subs[0].userName);
+    EXPECT_EQ("foobar1125", user->subs[0].channel);
+    EXPECT_EQ("foobar1126", user->subs[0].user);
     EXPECT_EQ("", user->subs[0].userMessage);
     EXPECT_EQ("foobar1126 is gifting 3 Tier 1 Subs to FooBar1124's community! They've gifted a total of 15 in the channel!", user->subs[0].systemMessage);
     EXPECT_EQ(Twitch::Messaging::SubInfo::Type::MysteryGift, user->subs[0].type);
@@ -2012,6 +2012,6 @@ TEST_F(MessagingTests, ReceivePrivateMessage) {
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitPrivateMessages(1));
     ASSERT_EQ(1, user->privateMessages.size());
-    EXPECT_EQ("jtv", user->privateMessages[0].userName);
+    EXPECT_EQ("jtv", user->privateMessages[0].user);
     EXPECT_EQ("foobar1126 is now hosting you.", user->privateMessages[0].messageContent);
 }
