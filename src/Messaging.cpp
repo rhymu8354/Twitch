@@ -933,7 +933,7 @@ namespace Twitch {
             messageInfo.messageContent = message.parameters[1];
 
             // Parse user ID.
-            const auto& userIdTag = message.tags.allTags.find("user-id");
+            const auto userIdTag = message.tags.allTags.find("user-id");
             if (
                 (userIdTag == message.tags.allTags.end())
                 || (sscanf(userIdTag->second.c_str(), "%" SCNuMAX, &messageInfo.userId) != 1)
@@ -950,7 +950,7 @@ namespace Twitch {
             }
 
             // Parse message ID.
-            const auto& messageIdTag = message.tags.allTags.find("id");
+            const auto messageIdTag = message.tags.allTags.find("id");
             if (messageIdTag != message.tags.allTags.end()) {
                 messageInfo.messageId = messageIdTag->second;
             }
@@ -1017,7 +1017,7 @@ namespace Twitch {
             whisperInfo.message = message.parameters[1];
 
             // Parse user ID.
-            const auto& userIdTag = message.tags.allTags.find("user-id");
+            const auto userIdTag = message.tags.allTags.find("user-id");
             if (
                 (userIdTag == message.tags.allTags.end())
                 || (sscanf(userIdTag->second.c_str(), "%" SCNuMAX, &whisperInfo.userId) != 1)
@@ -1043,7 +1043,7 @@ namespace Twitch {
             const auto& noticeText = message.parameters[1];
             NoticeInfo notice;
             notice.message = noticeText;
-            const auto& idTag = message.tags.allTags.find("msg-id");
+            const auto idTag = message.tags.allTags.find("msg-id");
             if (idTag != message.tags.allTags.end()) {
                 notice.id = idTag->second;
             }
@@ -1116,7 +1116,7 @@ namespace Twitch {
                 return;
             }
             for (const std::string& mode: { "slow", "followers-only", "r9k", "emote-only", "subs-only" }) {
-                const auto& modeTag = message.tags.allTags.find(mode);
+                const auto modeTag = message.tags.allTags.find(mode);
                 if (modeTag != message.tags.allTags.end()) {
                     RoomModeChangeInfo roomModeChange;
                     roomModeChange.channelName = message.parameters[0].substr(1);
@@ -1170,7 +1170,7 @@ namespace Twitch {
                 clear.userName = message.parameters[1];
 
                 // Parse user ID.
-                const auto& userIdTag = message.tags.allTags.find("target-user-id");
+                const auto userIdTag = message.tags.allTags.find("target-user-id");
                 if (
                     (userIdTag == message.tags.allTags.end())
                     || (sscanf(userIdTag->second.c_str(), "%" SCNuMAX, &clear.userId) != 1)
@@ -1179,14 +1179,14 @@ namespace Twitch {
                 }
 
                 // Extract ban/timeout reason, if any.
-                const auto& reasonTag = message.tags.allTags.find("ban-reason");
+                const auto reasonTag = message.tags.allTags.find("ban-reason");
                 if (reasonTag != message.tags.allTags.end()) {
                     clear.reason = UnescapeSpaces(reasonTag->second);
                 }
 
                 // Check for ban duration; if none, it's a permanent ban,
                 // rather than just a timeout.
-                const auto& banDurationTag = message.tags.allTags.find("ban-duration");
+                const auto banDurationTag = message.tags.allTags.find("ban-duration");
                 if (banDurationTag == message.tags.allTags.end()) {
                     clear.type = ClearInfo::Type::Ban;
                 } else {
@@ -1231,13 +1231,13 @@ namespace Twitch {
             clear.offendingMessageContent = message.parameters[1];
 
             // Extract offending message ID.
-            const auto& offendingMessageIdTag = message.tags.allTags.find("target-msg-id");
+            const auto offendingMessageIdTag = message.tags.allTags.find("target-msg-id");
             if (offendingMessageIdTag != message.tags.allTags.end()) {
                 clear.offendingMessageId = offendingMessageIdTag->second;
             }
 
             // Extract user name.
-            const auto& userNameTag = message.tags.allTags.find("login");
+            const auto userNameTag = message.tags.allTags.find("login");
             if (userNameTag != message.tags.allTags.end()) {
                 clear.userName = userNameTag->second;
             }
@@ -1302,7 +1302,7 @@ namespace Twitch {
             userState.tags = message.tags;
 
             // Parse user ID.
-            const auto& userIdTag = message.tags.allTags.find("user-id");
+            const auto userIdTag = message.tags.allTags.find("user-id");
             if (
                 (userIdTag == message.tags.allTags.end())
                 || (sscanf(userIdTag->second.c_str(), "%" SCNuMAX, &userState.userId) != 1)
@@ -1382,13 +1382,13 @@ namespace Twitch {
             }
 
             // Extract user name.
-            const auto& userNameTag = message.tags.allTags.find("login");
+            const auto userNameTag = message.tags.allTags.find("login");
             if (userNameTag != message.tags.allTags.end()) {
                 sub.userName = userNameTag->second;
             }
 
             // Parse user ID.
-            const auto& userIdTag = message.tags.allTags.find("user-id");
+            const auto userIdTag = message.tags.allTags.find("user-id");
             if (
                 (userIdTag == message.tags.allTags.end())
                 || (sscanf(userIdTag->second.c_str(), "%" SCNuMAX, &sub.userId) != 1)
@@ -1402,7 +1402,7 @@ namespace Twitch {
             }
 
             // Extract system message.
-            const auto& systemMessageTag = message.tags.allTags.find("system-msg");
+            const auto systemMessageTag = message.tags.allTags.find("system-msg");
             if (systemMessageTag != message.tags.allTags.end()) {
                 sub.systemMessage = UnescapeSpaces(systemMessageTag->second);
             }
