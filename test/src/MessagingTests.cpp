@@ -252,6 +252,7 @@ namespace {
         std::vector< Twitch::Messaging::MembershipInfo > joins;
         std::vector< Twitch::Messaging::MembershipInfo > parts;
         std::vector< Twitch::Messaging::MessageInfo > messages;
+        std::vector< Twitch::Messaging::MessageInfo > privateMessages;
         std::vector< Twitch::Messaging::WhisperInfo > whispers;
         std::vector< std::string > notices;
         std::vector< Twitch::Messaging::HostInfo > hosts;
@@ -307,6 +308,15 @@ namespace {
                 lock,
                 std::chrono::milliseconds(100),
                 [this, numMessages]{ return messages.size() == numMessages; }
+            );
+        }
+
+        bool AwaitPrivateMessages(size_t numPrivateMessages) {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this, numPrivateMessages]{ return privateMessages.size() == numPrivateMessages; }
             );
         }
 
@@ -432,6 +442,14 @@ namespace {
         ) override {
             std::lock_guard< std::mutex > lock(mutex);
             messages.push_back(std::move(messageInfo));
+            wakeCondition.notify_one();
+        }
+
+        virtual void PrivateMessage(
+            Twitch::Messaging::MessageInfo&& messageInfo
+        ) override {
+            std::lock_guard< std::mutex > lock(mutex);
+            privateMessages.push_back(std::move(messageInfo));
             wakeCondition.notify_one();
         }
 
@@ -1652,4 +1670,22 @@ TEST_F(MessagingTests, ReceiveSubNotification) {
         user->subs[0].tags.badges
     );
     EXPECT_EQ(0x008000, user->subs[0].tags.color);
+}
+
+TEST_F(MessagingTests, ReceivePrivateMessage) {
+    // Log in and join our own channel.
+    LogIn();
+    Join("foobar1124");
+
+    // Have the pretend Twitch server simulate telling us that we are now being
+    // hosted by someone else.
+    mockServer->ReturnToClient(
+        ":jtv!jtv@jtv.tmi.twitch.tv PRIVMSG foobar1124 :foobar1126 is now hosting you." + CRLF
+    );
+
+    // Wait for the message to be received.
+    ASSERT_TRUE(user->AwaitPrivateMessages(1));
+    ASSERT_EQ(1, user->privateMessages.size());
+    EXPECT_EQ("jtv", user->privateMessages[0].user);
+    EXPECT_EQ("foobar1126 is now hosting you.", user->privateMessages[0].message);
 }

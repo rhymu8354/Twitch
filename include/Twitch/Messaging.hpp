@@ -495,6 +495,19 @@ namespace Twitch {
             }
 
             /**
+             * This is called whenever the user receives a message sent
+             * privately from another user.  This is generally only seen when
+             * the special user "jtv" sends you a message to let you know when
+             * someone else is hosting you.
+             *
+             * @param[in] messageInfo
+             *     This contains all the information about the received
+             *     message.
+             */
+            virtual void PrivateMessage(MessageInfo&& messageInfo) {
+            }
+
+            /**
              * This is called whenever the user receives a whisper.
              *
              * @param[in] whisperInfo

@@ -924,13 +924,17 @@ namespace Twitch {
             ) {
                 return;
             }
-            const auto nickname = ExtractNicknameFromPrefix(message.prefix);
             MessageInfo messageInfo;
             messageInfo.tags = message.tags;
+            const auto nickname = ExtractNicknameFromPrefix(message.prefix);
             messageInfo.user = nickname;
-            messageInfo.channel = message.parameters[0].substr(1);
             messageInfo.message = message.parameters[1];
-            user->Message(std::move(messageInfo));
+            if (message.parameters[0][0] == '#') {
+                messageInfo.channel = message.parameters[0].substr(1);
+                user->Message(std::move(messageInfo));
+            } else {
+                user->PrivateMessage(std::move(messageInfo));
+            }
         }
 
         /**
