@@ -1343,14 +1343,42 @@ namespace Twitch {
                 return;
             }
 
-            // This may be either a raid or a sub notification, based
+            // This may be a ritual, a raid, or a sub notification, based
             // on the message ID.
             const auto messageIdTag = message.tags.allTags.find("msg-id");
             if (messageIdTag == message.tags.allTags.end()) {
                 return;
             }
             const auto messageId = messageIdTag->second;
-            if (messageId == "raid") {
+            if (messageId == "ritual") {
+                // Extract channel name.
+                RitualInfo ritual;
+                ritual.channel = message.parameters[0].substr(1);
+
+                // Extract user name.
+                const auto userNameTag = message.tags.allTags.find("login");
+                if (userNameTag != message.tags.allTags.end()) {
+                    ritual.user = userNameTag->second;
+                }
+
+                // Extract ritual name.
+                const auto ritualTag = message.tags.allTags.find("msg-param-ritual-name");
+                if (ritualTag != message.tags.allTags.end()) {
+                    ritual.ritual = ritualTag->second;
+                }
+
+                // Extract system message.
+                const auto systemMessageTag = message.tags.allTags.find("system-msg");
+                if (systemMessageTag != message.tags.allTags.end()) {
+                    ritual.systemMessage = UnescapeMessage(systemMessageTag->second);
+                }
+
+                // Copy over the tags.
+                ritual.tags = message.tags;
+
+                // Trigger callback to the user.
+                user->Ritual(std::move(ritual));
+            } else if (messageId == "raid") {
                 // Extract channel name.
                 RaidInfo raid;
                 raid.channel = message.parameters[0].substr(1);

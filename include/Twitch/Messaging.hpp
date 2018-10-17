@@ -540,6 +540,38 @@ namespace Twitch {
         };
 
         /**
+         * This contains all the information about an incoming ritual
+         * notification.
+         */
+        struct RitualInfo {
+            /**
+             * This is the channel in which the ritual was performed.
+             */
+            std::string channel;
+
+            /**
+             * This is the name of the user involved in the ritual.
+             */
+            std::string user;
+
+            /**
+             * This is the name of the ritual performed.
+             */
+            std::string ritual;
+
+            /**
+             * This is the content of any message the system provided when the
+             * ritual was performed.
+             */
+            std::string systemMessage;
+
+            /**
+             * This contains information provided in the message's tags.
+             */
+            TagsInfo tags;
+        };
+
+        /**
          * This is a base class and interface to be implemented by the user of
          * this class, in order to receive notifications, events, and other
          * callbacks from the class.
@@ -714,6 +746,16 @@ namespace Twitch {
              *     This contains all the information about the incoming raid.
              */
             virtual void Raid(RaidInfo&& raidInfo) {
+            }
+
+            /**
+             * This is called whenever the server announces that a ritual was
+             * performed in a channel.
+             *
+             * @param[in] ritualInfo
+             *     This contains all the information about the ritual.
+             */
+            virtual void Ritual(RitualInfo&& ritualInfo) {
             }
         };
 

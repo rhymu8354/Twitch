@@ -269,6 +269,7 @@ namespace {
         std::vector< Twitch::Messaging::UserStateInfo > userStates;
         std::vector< Twitch::Messaging::SubInfo > subs;
         std::vector< Twitch::Messaging::RaidInfo > raids;
+        std::vector< Twitch::Messaging::RitualInfo > rituals;
         std::condition_variable wakeCondition;
         std::mutex mutex;
 
@@ -418,6 +419,15 @@ namespace {
             );
         }
 
+        bool AwaitRituals(size_t numRituals) {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this, numRituals]{ return rituals.size() == numRituals; }
+            );
+        }
+
         // Twitch::Messaging::User
 
         virtual void Doom() override {
@@ -542,6 +552,13 @@ namespace {
             wakeCondition.notify_one();
         }
 
+        virtual void Ritual(
+            Twitch::Messaging::RitualInfo&& ritualInfo
+        ) override {
+            std::lock_guard< std::mutex > lock(mutex);
+            rituals.push_back(std::move(ritualInfo));
+            wakeCondition.notify_one();
+        }
     };
 
 }
@@ -2113,6 +2130,63 @@ TEST_F(MessagingTests, ReceiveRaidNotification) {
         user->raids[0].tags.badges
     );
     EXPECT_EQ(0x008000, user->raids[0].tags.color);
+}
+
+TEST_F(MessagingTests, ReceiveRitualNotification) {
+    // Log in (with tags capability) and join a channel.
+    LogIn(true);
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate a ritual notification.
+    mockServer->ReturnToClient(
+        // tags
+        "@badges=premium/1;"
+        "color=#008000;"
+        "display-name=FooBar1126;"
+        "emotes=30259:0-6;"
+        "flags=;"
+        "id=11223344-5566-7788-1122-112233445566;"
+        "login=foobar1126;"
+        "mod=0;"
+        "msg-id=ritual;"
+        "msg-param-ritual-name=new_chatter;"
+        "room-id=12345;"
+        "subscriber=1;"
+        "system-msg=@foobar1126\\sis\\snew\\shere.\\sSay\\shello!;"
+        "tmi-sent-ts=1539652354185;"
+        "turbo=0;"
+        "user-id=1122334455;"
+        "user-type= "
+
+        // prefix
+        ":tmi.twitch.tv "
+
+        // command
+        "USERNOTICE "
+
+        // arguments
+        "#foobar1125 :HeyGuys" + CRLF
+    );
+
+    // Wait for the message to be received.
+    ASSERT_TRUE(user->AwaitRituals(1));
+    ASSERT_EQ(1, user->rituals.size());
+    EXPECT_EQ("foobar1125", user->rituals[0].channel);
+    EXPECT_EQ("foobar1126", user->rituals[0].user);
+    EXPECT_EQ("new_chatter", user->rituals[0].ritual);
+    EXPECT_EQ("@foobar1126 is new here. Say hello!", user->rituals[0].systemMessage);
+    EXPECT_EQ(1122334455, user->rituals[0].tags.userId);
+    EXPECT_EQ(12345, user->rituals[0].tags.channelId);
+    EXPECT_EQ(1539652354, user->rituals[0].tags.timestamp);
+    EXPECT_EQ(185, user->rituals[0].tags.timeMilliseconds);
+    EXPECT_EQ("FooBar1126", user->rituals[0].tags.displayName);
+    EXPECT_EQ(
+        (std::set< std::string >{
+            "premium/1",
+        }),
+        user->rituals[0].tags.badges
+    );
+    EXPECT_EQ(0x008000, user->rituals[0].tags.color);
 }
 
 TEST_F(MessagingTests, ReceivePrivateMessage) {
