@@ -191,7 +191,7 @@ namespace Twitch {
              * This is the number of viewers currently in the channel being
              * hosted.
              */
-            size_t viewers;
+            size_t viewers = 0;
         };
 
         /**
@@ -222,7 +222,7 @@ namespace Twitch {
              * - emote-only: 1 if on, 0 if off
              * - subs-only: 1 if on, 0 if off
              */
-            int parameter;
+            int parameter = 0;
 
             /**
              * This is the channel whose mode changed.
@@ -232,7 +232,7 @@ namespace Twitch {
             /**
              * This is the ID of the channel whose mode changed.
              */
-            int channelId;
+            int channelId = 0;
         };
 
         /**
@@ -277,7 +277,7 @@ namespace Twitch {
              *
              * NOTE: not available for ClearMessage type.
              */
-            int channelId;
+            int channelId = 0;
 
             /**
              * This is the name of the user who was timed out or banned.
@@ -291,7 +291,7 @@ namespace Twitch {
              *
              * NOTE: only applies for types Timeout and Ban.
              */
-            int userId;
+            int userId = 0;
 
             /**
              * This is a human-readable string meant to convey an explanation
@@ -378,7 +378,7 @@ namespace Twitch {
              *
              * NOTE: This is only provided for the global state notification.
              */
-            int userId;
+            int userId = 0;
 
             /**
              * This contains information provided in the message's tags.
@@ -399,7 +399,7 @@ namespace Twitch {
             /**
              * This is the ID of the channel to which the user subscribed.
              */
-            int channelId;
+            int channelId = 0;
 
             /**
              * This is the name of the user who subscribed.
@@ -409,7 +409,7 @@ namespace Twitch {
             /**
              * This is the ID of the user who subscribed.
              */
-            int userId;
+            int userId = 0;
 
             /**
              * This is the content of any message the user included when they
@@ -439,7 +439,7 @@ namespace Twitch {
              * This is the numerical identifier of the subscription plan chosen
              * by the user.
              */
-            int planId;
+            int planId = 0;
 
             /**
              * This is the time, as expressed in seconds past the UNIX epoch (1
