@@ -1042,7 +1042,10 @@ namespace Twitch {
             user->Notice(std::move(notice));
             if (
                 !loggedIn
-                && (noticeText == "Login unsuccessful")
+                && (
+                    (noticeText == "Login unsuccessful")
+                    || (noticeText == "Login authentication failed")
+                )
             ) {
                 user->LogOut();
                 static const ActionProcessors loginFailActionProcessors = {

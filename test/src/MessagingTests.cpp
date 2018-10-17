@@ -934,7 +934,7 @@ TEST_F(MessagingTests, LogInFailureBadCredentials) {
     EXPECT_FALSE(user->AwaitLogIn());
     mockServer->ClearLinesReceived();
     mockServer->ReturnToClient(
-        ":tmi.twitch.tv NOTICE * :Login unsuccessful" + CRLF
+        ":tmi.twitch.tv NOTICE * :Login authentication failed" + CRLF
     );
     EXPECT_FALSE(user->AwaitLogIn());
     EXPECT_TRUE(user->AwaitLogOut());
