@@ -657,12 +657,12 @@ namespace Twitch {
             }
 
             /**
-             * This is called whenever the server provides the user with their
-             * state, either globally, or within the context of a channel.
+             * This is called whenever the server makes a subscription
+             * announcement in a channel.
              *
-             * @param[in] userStateInfo
-             *     This contains all the information about the received
-             *     user state notification.
+             * @param[in] subInfo
+             *     This contains all the information about the subscription
+             *     announcement.
              */
             virtual void Sub(SubInfo&& subInfo) {
             }
