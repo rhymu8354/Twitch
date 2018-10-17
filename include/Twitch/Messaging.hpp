@@ -82,6 +82,13 @@ namespace Twitch {
             time_t timestamp = 0;
 
             /**
+             * This is the fractional amount of time, in milliseconds, when
+             * this message was sent, past the second indicated by the
+             * timestamp.
+             */
+            unsigned int timeMilliseconds = 0;
+
+            /**
              * This holds a copy of the names and values of all the tags,
              * including both the ones known about by the parser (above) as
              * well as those not known.

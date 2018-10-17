@@ -78,9 +78,11 @@ namespace {
             } else if (name == "tmi-sent-ts") {
                 uintmax_t timeAsInt;
                 if (sscanf(value.c_str(), "%" SCNuMAX, &timeAsInt) == 1) {
-                    parsedTags.timestamp = (decltype(parsedTags.timestamp))timeAsInt;
+                    parsedTags.timestamp = (decltype(parsedTags.timestamp))(timeAsInt / 1000);
+                    parsedTags.timeMilliseconds = (decltype(parsedTags.timeMilliseconds))(timeAsInt % 1000);
                 } else {
                     parsedTags.timestamp = 0;
+                    parsedTags.timeMilliseconds = 0;
                 }
             }
         }
