@@ -1363,6 +1363,15 @@ namespace Twitch {
                     sub.type = SubInfo::Type::Sub;
                 } else if (subType == "resub") {
                     sub.type = SubInfo::Type::Resub;
+
+                    // Parse subscription renewal month count.
+                    const auto monthsIdTag = message.tags.allTags.find("msg-param-months");
+                    if (
+                        (monthsIdTag == message.tags.allTags.end())
+                        || (sscanf(monthsIdTag->second.c_str(), "%zu", &sub.months) != 1)
+                    ) {
+                        sub.months = 0;
+                    }
                 } else if (subType == "subgift") {
                     sub.type = SubInfo::Type::Gifted;
 

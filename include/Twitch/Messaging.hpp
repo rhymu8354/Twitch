@@ -483,6 +483,12 @@ namespace Twitch {
             std::string planName;
 
             /**
+             * If this is a sub renewal, this is the number of consecutive
+             * months the user has been subscribed to the channel.
+             */
+            size_t months = 0;
+
+            /**
              * This is the numerical identifier of the subscription plan chosen
              * by the user.
              */

@@ -1783,6 +1783,7 @@ TEST_F(MessagingTests, ReceiveSubNotificationResub) {
     EXPECT_EQ("foobar1126 just subscribed with a Tier 1 sub. foobar1126 subscribed for 4 months in a row!", user->subs[0].systemMessage);
     EXPECT_EQ(Twitch::Messaging::SubInfo::Type::Resub, user->subs[0].type);
     EXPECT_EQ("The PogChamp Plan", user->subs[0].planName);
+    EXPECT_EQ(4, user->subs[0].months);
     EXPECT_EQ(1000, user->subs[0].planId);
     EXPECT_EQ(1122334455, user->subs[0].tags.userId);
     EXPECT_EQ(12345, user->subs[0].tags.channelId);
@@ -1816,7 +1817,6 @@ TEST_F(MessagingTests, ReceiveSubNotificationNewSub) {
         "login=foobar1126;"
         "mod=0;"
         "msg-id=sub;"
-        "msg-param-months=4;"
         "msg-param-sub-plan-name=The\\sPogChamp\\sPlan;"
         "msg-param-sub-plan=1000;"
         "room-id=12345;"
@@ -1879,7 +1879,6 @@ TEST_F(MessagingTests, ReceiveSubNotificationGifted) {
         "login=foobar1126;"
         "mod=0;"
         "msg-id=subgift;"
-        "msg-param-months=1;"
         "msg-param-recipient-display-name=FooBar1124;"
         "msg-param-recipient-id=5544332211;"
         "msg-param-recipient-user-name=foobar1124;"
