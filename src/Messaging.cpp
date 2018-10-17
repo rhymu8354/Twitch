@@ -1041,6 +1041,9 @@ namespace Twitch {
             const auto& noticeText = message.parameters[1];
             NoticeInfo notice;
             notice.message = noticeText;
+            if (message.parameters[0] != "*") {
+                notice.channel = message.parameters[0].substr(1);
+            }
             const auto idTag = message.tags.allTags.find("msg-id");
             if (idTag != message.tags.allTags.end()) {
                 notice.id = idTag->second;

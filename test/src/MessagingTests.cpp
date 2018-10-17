@@ -1296,12 +1296,13 @@ TEST_F(MessagingTests, SendWhisper) {
     EXPECT_TRUE(mockServer->AwaitLineReceived("PRIVMSG #jtv :.w foobar1126 Hello, World!"));
 }
 
-TEST_F(MessagingTests, ReceiveGenericNotice) {
+TEST_F(MessagingTests, ReceiveGenericNoticeGlobal) {
     // Just log in (with tags capability).
     // There's no need to join any channel in order to receive notices.
     LogIn(true);
 
-    // Have the pretend Twitch server simulate some kind of generic notice.
+    // Have the pretend Twitch server simulate some kind of generic notice sent
+    // without channel context.
     mockServer->ReturnToClient(
         "@msg-id=fashion :tmi.twitch.tv NOTICE * :Grey is the new black!" + CRLF
     );
@@ -1310,7 +1311,27 @@ TEST_F(MessagingTests, ReceiveGenericNotice) {
     ASSERT_TRUE(user->AwaitNotices(1));
     ASSERT_EQ(1, user->notices.size());
     EXPECT_EQ("Grey is the new black!", user->notices[0].message);
+    EXPECT_EQ("", user->notices[0].channel);
     EXPECT_EQ("fashion", user->notices[0].id);
+}
+
+TEST_F(MessagingTests, ReceiveGenericNoticeInChannel) {
+    // Log in (with tags capability) and join a channel.
+    LogIn(true);
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate some kind of generic notice sent
+    // within the context of a channel.
+    mockServer->ReturnToClient(
+        "@msg-id=pmi :tmi.twitch.tv NOTICE #foobar1125 :Remember: Positive Mental Attitude!" + CRLF
+    );
+
+    // Wait for the message to be received.
+    ASSERT_TRUE(user->AwaitNotices(1));
+    ASSERT_EQ(1, user->notices.size());
+    EXPECT_EQ("Remember: Positive Mental Attitude!", user->notices[0].message);
+    EXPECT_EQ("foobar1125", user->notices[0].channel);
+    EXPECT_EQ("pmi", user->notices[0].id);
 }
 
 TEST_F(MessagingTests, SomeoneElseJoinsChannelWeHaveJoined) {

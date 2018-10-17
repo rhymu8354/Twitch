@@ -176,6 +176,13 @@ namespace Twitch {
              * This is the content of the message.
              */
             std::string message;
+
+            /**
+             * If the notice was received within the context of a channel, this
+             * is the name of the channel.  Otherwise, this will be empty,
+             * indicating a global server notice.
+             */
+            std::string channel;
         };
 
         /**
