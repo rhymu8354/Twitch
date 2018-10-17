@@ -1447,6 +1447,26 @@ namespace Twitch {
                     ) {
                         sub.senderCount = 0;
                     }
+                } else if (subType == "submysterygift") {
+                    sub.type = SubInfo::Type::MysteryGift;
+
+                    // Parse gift count.
+                    const auto recipientIdTag = message.tags.allTags.find("msg-param-mass-gift-count");
+                    if (
+                        (recipientIdTag == message.tags.allTags.end())
+                        || (sscanf(recipientIdTag->second.c_str(), "%" SCNuMAX, &sub.massGiftCount) != 1)
+                    ) {
+                        sub.massGiftCount = 0;
+                    }
+
+                    // Parse sender gift count.
+                    const auto senderCountTag = message.tags.allTags.find("msg-param-sender-count");
+                    if (
+                        (senderCountTag == message.tags.allTags.end())
+                        || (sscanf(senderCountTag->second.c_str(), "%zu", &sub.senderCount) != 1)
+                    ) {
+                        sub.senderCount = 0;
+                    }
                 }
             }
 

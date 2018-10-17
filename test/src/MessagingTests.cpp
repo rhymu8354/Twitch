@@ -1879,6 +1879,71 @@ TEST_F(MessagingTests, ReceiveSubNotificationGifted) {
     EXPECT_EQ(0x008000, user->subs[0].tags.color);
 }
 
+TEST_F(MessagingTests, ReceiveSubNotificationMysteryGift) {
+    // Log in (with tags capability) and join a channel.
+    LogIn(true);
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate someone else subscribing to the
+    // channel for the first time, or after not being subscribed for a while.
+    mockServer->ReturnToClient(
+        // tags
+        "@badges=subscriber/3;"
+        "color=#008000;"
+        "display-name=FooBar1126;"
+        "emotes=;"
+        "flags=;"
+        "id=11223344-5566-7788-1122-112233445566;"
+        "login=foobar1126;"
+        "mod=0;"
+        "msg-id=submysterygift;"
+        "msg-param-mass-gift-count=3;"
+        "msg-param-sender-count=15;"
+        "msg-param-sub-plan-name=The\\sPogChamp\\sPlan;"
+        "msg-param-sub-plan=1000;"
+        "room-id=12345;"
+        "subscriber=1;"
+        "system-msg=foobar1126\\sis\\sgifting\\s3\\sTier\\s1\\sSubs\\sto\\sFooBar1124's\\scommunity!\\sThey've\\sgifted\\sa\\stotal\\sof\\s15\\sin\\sthe\\schannel!;"
+        "tmi-sent-ts=1539652354185;"
+        "turbo=0;"
+        "user-id=1122334455;"
+        "user-type= "
+
+        // prefix
+        ":tmi.twitch.tv "
+
+        // command
+        "USERNOTICE "
+
+        // arguments
+        "#foobar1125" + CRLF
+    );
+
+    // Wait for the message to be received.
+    ASSERT_TRUE(user->AwaitSubs(1));
+    ASSERT_EQ(1, user->subs.size());
+    EXPECT_EQ("foobar1125", user->subs[0].channelName);
+    EXPECT_EQ(12345, user->subs[0].channelId);
+    EXPECT_EQ("foobar1126", user->subs[0].userName);
+    EXPECT_EQ(1122334455, user->subs[0].userId);
+    EXPECT_EQ("", user->subs[0].userMessage);
+    EXPECT_EQ("foobar1126 is gifting 3 Tier 1 Subs to FooBar1124's community! They've gifted a total of 15 in the channel!", user->subs[0].systemMessage);
+    EXPECT_EQ(Twitch::Messaging::SubInfo::Type::MysteryGift, user->subs[0].type);
+    EXPECT_EQ(3, user->subs[0].massGiftCount);
+    EXPECT_EQ(15, user->subs[0].senderCount);
+    EXPECT_EQ("The PogChamp Plan", user->subs[0].planName);
+    EXPECT_EQ(1000, user->subs[0].planId);
+    EXPECT_EQ(1539652354185, user->subs[0].tags.timestamp);
+    EXPECT_EQ("FooBar1126", user->subs[0].tags.displayName);
+    EXPECT_EQ(
+        (std::set< std::string >{
+            "subscriber/3",
+        }),
+        user->subs[0].tags.badges
+    );
+    EXPECT_EQ(0x008000, user->subs[0].tags.color);
+}
+
 TEST_F(MessagingTests, ReceivePrivateMessage) {
     // Log in and join our own channel.
     LogIn();

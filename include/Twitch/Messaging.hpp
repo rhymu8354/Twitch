@@ -433,6 +433,11 @@ namespace Twitch {
                  * Subscription gifted to a user from another user
                  */
                 Gifted,
+
+                /**
+                 * Subscriptions gifted to a channel's community from a user
+                 */
+                MysteryGift,
             } type = Type::Unknown;
 
             /**
@@ -472,6 +477,12 @@ namespace Twitch {
              * gifted.
              */
             uintmax_t recipientId = 0;
+
+            /**
+             * If this is a mystery gift announcement, this is the number of
+             * subs that are being gifted to the community.
+             */
+            size_t massGiftCount = 0;
 
             /**
              * If this is a gifted sub, this is the number of gifted subs the
