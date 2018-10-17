@@ -945,7 +945,7 @@ TEST_F(MessagingTests, LogInFailureBadCredentials) {
         mockServer->GetLinesReceived()
     );
     ASSERT_EQ(1, user->notices.size());
-    EXPECT_EQ("Login unsuccessful", user->notices[0].message);
+    EXPECT_EQ("Login authentication failed", user->notices[0].message);
 }
 
 TEST_F(MessagingTests, JoinChannel) {
