@@ -117,6 +117,12 @@ namespace Twitch {
             TagsInfo tags;
 
             /**
+             * This indicates whether or not the message was sent as an action
+             * (e.g. "/me ...").
+             */
+            bool isAction = false;
+
+            /**
              * This is the name of the channel to which the message was sent.
              */
             std::string channel;

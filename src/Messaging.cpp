@@ -951,7 +951,19 @@ namespace Twitch {
             messageInfo.user = nickname;
 
             // Copy message content.
-            messageInfo.messageContent = message.parameters[1];
+            // Check to see if it's an action.
+            if (
+                (message.parameters[1].length() >= 8)
+                && (message.parameters[1][0] == '\x1')
+                && (message.parameters[1].substr(1, 6) == "ACTION")
+                && (message.parameters[1][message.parameters[1].length() - 1] == '\x1')
+            ) {
+                messageInfo.isAction = true;
+                messageInfo.messageContent = message.parameters[1].substr(7, message.parameters[1].length() - 8);
+            } else {
+                messageInfo.isAction = false;
+                messageInfo.messageContent = message.parameters[1];
+            }
 
             // Parse message ID.
             const auto messageIdTag = message.tags.allTags.find("id");

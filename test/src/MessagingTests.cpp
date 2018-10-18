@@ -1121,6 +1121,7 @@ TEST_F(MessagingTests, ReceiveMessagesWithTagsCapabilityNoBits) {
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitMessages(1));
     ASSERT_EQ(1, user->messages.size());
+    EXPECT_FALSE(user->messages[0].isAction);
     EXPECT_EQ("foobar1125", user->messages[0].channel);
     EXPECT_EQ("foobar1126", user->messages[0].user);
     EXPECT_EQ("1122aa44-55ff-ee88-11cc-1122dd44bb66", user->messages[0].messageId);
@@ -1186,6 +1187,7 @@ TEST_F(MessagingTests, ReceiveMessagesWithTagsCapabilityWithBits) {
     // Wait for the message to be received.
     ASSERT_TRUE(user->AwaitMessages(1));
     ASSERT_EQ(1, user->messages.size());
+    EXPECT_FALSE(user->messages[0].isAction);
     EXPECT_EQ("foobar1125", user->messages[0].channel);
     EXPECT_EQ("foobar1126", user->messages[0].user);
     EXPECT_EQ("1122aa44-55ff-ee88-11cc-1122dd44bb66", user->messages[0].messageId);
@@ -1210,6 +1212,26 @@ TEST_F(MessagingTests, ReceiveMessagesWithTagsCapabilityWithBits) {
     );
     EXPECT_EQ(0x5B99FF, user->messages[0].tags.color);
     EXPECT_EQ(100, user->messages[0].bits);
+}
+
+TEST_F(MessagingTests, ReceiveAction) {
+    // Log in and join a channel.
+    LogIn();
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate someone else sending an action
+    // chat in the channel.
+    mockServer->ReturnToClient(
+        ":foobar1126!foobar1126@foobar1126.tmi.twitch.tv PRIVMSG #foobar1125 :" "\x1" "ACTION is testing" "\x1" + CRLF
+    );
+
+    // Wait for the message to be received.
+    ASSERT_TRUE(user->AwaitMessages(1));
+    ASSERT_EQ(1, user->messages.size());
+    EXPECT_TRUE(user->messages[0].isAction);
+    EXPECT_EQ("foobar1125", user->messages[0].channel);
+    EXPECT_EQ("foobar1126", user->messages[0].user);
+    EXPECT_EQ(" is testing", user->messages[0].messageContent);
 }
 
 TEST_F(MessagingTests, SendMessage) {
