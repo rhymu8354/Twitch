@@ -498,6 +498,7 @@ namespace Twitch {
             }
             connection->Disconnect();
             user->LogOut();
+            connection = nullptr;
         }
 
         /**
@@ -1633,6 +1634,9 @@ namespace Twitch {
                     lock.unlock();
                     PerformAction(std::move(action));
                     lock.lock();
+                }
+                if (!connection) {
+                    actionsAwaitingResponses.clear();
                 }
                 if (!actionsAwaitingResponses.empty()) {
                     wakeWorker.wait_for(

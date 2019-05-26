@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <condition_variable>
+#include <future>
 #include <gtest/gtest.h>
 #include <memory>
 #include <mutex>
@@ -588,6 +589,8 @@ struct MessagingTests
      */
     std::shared_ptr< MockServer > mockServer = std::make_shared< MockServer >();
 
+    std::shared_ptr< std::promise< void > > newConnectionMade;
+
     /**
      * This is used to simulate real time, when testing timeouts.
      */
@@ -685,6 +688,9 @@ struct MessagingTests
         const auto connectionFactory = [this]() -> std::shared_ptr< Twitch::Connection > {
             if (connectionCreatedByUnitUnderTest) {
                 mockServer = std::make_shared< MockServer >();
+                if (newConnectionMade) {
+                    newConnectionMade->set_value();
+                }
             }
             connectionCreatedByUnitUnderTest = true;
             return mockServer;
@@ -787,6 +793,23 @@ TEST_F(MessagingTests, DiagnosticsUnsubscription) {
         }),
         capturedDiagnosticMessages
     );
+}
+
+TEST_F(MessagingTests, NewConnectionForLogInAfterDisconnect) {
+    const std::string nickname = "foobar1124";
+    const std::string token = "alskdfjasdf87sdfsdffsd";
+    tmi.LogIn(nickname, token);
+    auto firstMockServer = mockServer;
+    ASSERT_TRUE(mockServer->AwaitCapLs());
+    mockServer->DisconnectClient();
+    ASSERT_TRUE(user->AwaitLogOut());
+    newConnectionMade = std::make_shared< std::promise< void > >();
+    tmi.LogIn(nickname, token);
+    ASSERT_TRUE(
+        newConnectionMade->get_future().wait_for(std::chrono::milliseconds(100))
+        == std::future_status::ready
+    );
+    EXPECT_FALSE(mockServer == firstMockServer);
 }
 
 TEST_F(MessagingTests, LogIntoChat) {
