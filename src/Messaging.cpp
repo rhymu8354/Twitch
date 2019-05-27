@@ -499,6 +499,9 @@ namespace Twitch {
             connection->Disconnect();
             user->LogOut();
             connection = nullptr;
+            loggedIn = false;
+            actionsAwaitingResponses.clear();
+            capsSupported.clear();
         }
 
         /**

@@ -795,12 +795,27 @@ TEST_F(MessagingTests, DiagnosticsUnsubscription) {
     );
 }
 
-TEST_F(MessagingTests, NewConnectionForLogInAfterDisconnect) {
+TEST_F(MessagingTests, LogInAfterDisconnect) {
     const std::string nickname = "foobar1124";
     const std::string token = "alskdfjasdf87sdfsdffsd";
     tmi.LogIn(nickname, token);
     auto firstMockServer = mockServer;
     ASSERT_TRUE(mockServer->AwaitCapLs());
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv CAP * LS :twitch.tv/membership twitch.tv/tags twitch.tv/commands" + CRLF
+    );
+    ASSERT_TRUE(mockServer->AwaitCapReq());
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv CAP * ACK :twitch.tv/commands twitch.tv/membership twitch.tv/tags" + CRLF
+    );
+    ASSERT_TRUE(mockServer->AwaitCapEnd());
+    ASSERT_TRUE(mockServer->AwaitNickname());
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv 372 <user> :You are in a maze of twisty passages." + CRLF
+        + ":tmi.twitch.tv 376 <user> :>" + CRLF
+    );
+    ASSERT_TRUE(user->AwaitLogIn());
+    user->loggedIn = false;
     mockServer->DisconnectClient();
     ASSERT_TRUE(user->AwaitLogOut());
     newConnectionMade = std::make_shared< std::promise< void > >();
@@ -809,7 +824,22 @@ TEST_F(MessagingTests, NewConnectionForLogInAfterDisconnect) {
         newConnectionMade->get_future().wait_for(std::chrono::milliseconds(100))
         == std::future_status::ready
     );
-    EXPECT_FALSE(mockServer == firstMockServer);
+    ASSERT_FALSE(mockServer == firstMockServer);
+    ASSERT_TRUE(mockServer->AwaitCapLs());
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv CAP * LS :twitch.tv/membership twitch.tv/tags twitch.tv/commands" + CRLF
+    );
+    ASSERT_TRUE(mockServer->AwaitCapReq());
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv CAP * ACK :twitch.tv/commands twitch.tv/membership twitch.tv/tags" + CRLF
+    );
+    ASSERT_TRUE(mockServer->AwaitCapEnd());
+    ASSERT_TRUE(mockServer->AwaitNickname());
+    mockServer->ReturnToClient(
+        ":tmi.twitch.tv 372 <user> :You are in a maze of twisty passages." + CRLF
+        + ":tmi.twitch.tv 376 <user> :>" + CRLF
+    );
+    EXPECT_TRUE(user->AwaitLogIn());
 }
 
 TEST_F(MessagingTests, LogIntoChat) {
