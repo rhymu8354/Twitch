@@ -17,6 +17,7 @@
 #include <list>
 #include <map>
 #include <mutex>
+#include <queue>
 #include <regex>
 #include <set>
 #include <stdint.h>
@@ -545,6 +546,7 @@ namespace Twitch {
          */
         void ProcessTimeouts() {
             const auto now = timeKeeper->GetCurrentTime();
+            std::queue< Action > actionsToTimeOut;
             for (
                 auto it = actionsAwaitingResponses.begin(),
                 end = actionsAwaitingResponses.end();
@@ -552,11 +554,16 @@ namespace Twitch {
             ) {
                 auto& action = *it;
                 if (now >= action.expiration) {
-                    TimeoutAction(std::move(action));
+                    actionsToTimeOut.push(std::move(action));
                     it = actionsAwaitingResponses.erase(it);
                 } else {
                     ++it;
                 }
+            }
+            while (!actionsToTimeOut.empty()) {
+                auto& action = actionsToTimeOut.front();
+                TimeoutAction(std::move(action));
+                actionsToTimeOut.pop();
             }
         }
 
