@@ -824,6 +824,7 @@ namespace Twitch {
          */
         void PerformActionProcessMessagesReceived(Action&& action) {
             static const std::map< std::string, ServerCommandHandler > serverCommandHandlers = {
+                {"353", &Impl::HandleServerCommandNameList},
                 {"376", &Impl::HandleServerCommandMotd},
                 {"PING", &Impl::HandleServerCommandPing},
                 {"JOIN", &Impl::HandleServerCommandJoin},
@@ -867,6 +868,23 @@ namespace Twitch {
                 message,
                 motdActionProcessors
             );
+        }
+
+        /**
+         * This method is called to handle the name list command (353) from
+         * the Twitch server.
+         *
+         * @param[in] message
+         *     This holds information about the server command to handle.
+         */
+        void HandleServerCommandNameList(Message&& message) {
+            if (message.parameters.size() != 4) {
+                return;
+            }
+            NameListInfo nameListInfo;
+            nameListInfo.channel = message.parameters[2].substr(1);
+            nameListInfo.names = SystemAbstractions::Split(message.parameters[3], ' ');
+            user->NameList(std::move(nameListInfo));
         }
 
         /**

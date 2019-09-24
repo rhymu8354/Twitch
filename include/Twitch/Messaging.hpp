@@ -208,6 +208,22 @@ namespace Twitch {
         };
 
         /**
+         * This contains all the information about a list of login names
+         * received about a channel.
+         */
+        struct NameListInfo {
+            /**
+             * This is the channel for which the list of login names applies.
+             */
+            std::string channel;
+
+            /**
+             * This is the list of login names received for the channel.
+             */
+            std::vector< std::string > names;
+        };
+
+        /**
          * This contains all the information about a hosting change.
          */
         struct HostInfo {
@@ -630,6 +646,18 @@ namespace Twitch {
              *     were involved.
              */
             virtual void Leave(MembershipInfo&& membershipInfo) {
+            }
+
+            /**
+             * This is called whenever a list of login names of users
+             * present in a channel is obtained from the server (typically
+             * when channel is first joined).
+             *
+             * @param[in] nameListInfo
+             *     This holds the information about the channel and list
+             *     of login names associated with it.
+             */
+            virtual void NameList(NameListInfo&& nameListInfo) {
             }
 
             /**

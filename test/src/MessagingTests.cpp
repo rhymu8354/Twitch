@@ -257,6 +257,7 @@ namespace {
         bool loggedIn = false;
         bool loggedOut = false;
         bool doom = false;
+        std::vector< Twitch::Messaging::NameListInfo > nameLists;
         std::vector< Twitch::Messaging::MembershipInfo > joins;
         std::vector< Twitch::Messaging::MembershipInfo > parts;
         std::vector< Twitch::Messaging::MessageInfo > messages;
@@ -309,6 +310,15 @@ namespace {
                 lock,
                 std::chrono::milliseconds(100),
                 [this, numParts]{ return parts.size() == numParts; }
+            );
+        }
+
+        bool AwaitNameLists(size_t numNameLists) {
+            std::unique_lock< std::mutex > lock(mutex);
+            return wakeCondition.wait_for(
+                lock,
+                std::chrono::milliseconds(100),
+                [this, numNameLists]{ return nameLists.size() == numNameLists; }
             );
         }
 
@@ -462,6 +472,14 @@ namespace {
         ) override {
             std::lock_guard< std::mutex > lock(mutex);
             parts.push_back(std::move(membershipInfo));
+            wakeCondition.notify_one();
+        }
+
+        virtual void NameList(
+            Twitch::Messaging::NameListInfo&& nameListInfo
+        ) override {
+            std::lock_guard< std::mutex > lock(mutex);
+            nameLists.push_back(std::move(nameListInfo));
             wakeCondition.notify_one();
         }
 
@@ -1424,6 +1442,27 @@ TEST_F(MessagingTests, ReceiveGenericNoticeInChannel) {
     EXPECT_EQ("Remember: Positive Mental Attitude!", user->notices[0].message);
     EXPECT_EQ("foobar1125", user->notices[0].channel);
     EXPECT_EQ("pmi", user->notices[0].id);
+}
+
+TEST_F(MessagingTests, NameListInChannelWeHaveJoined) {
+    // Log in and join a channel.
+    LogIn();
+    Join("foobar1125");
+
+    // Have the pretend Twitch server simulate sending the channel names list.
+    mockServer->ReturnToClient(
+        ":foobar1124.tmi.twitch.tv 353 foobar1124 = #foobar1125 :bob joe" + CRLF
+        + ":foobar1124.tmi.twitch.tv 353 foobar1124 = #foobar1125 :fred" + CRLF
+        + ":foobar1124.tmi.twitch.tv 366 foobar1124 #foobar1125 :End of /NAMES list" + CRLF
+    );
+
+    // Wait for the name lists to be received.
+    ASSERT_TRUE(user->AwaitNameLists(2));
+    ASSERT_EQ(2, user->nameLists.size());
+    EXPECT_EQ("foobar1125", user->nameLists[0].channel);
+    EXPECT_EQ(std::vector< std::string >({"bob", "joe"}), user->nameLists[0].names);
+    EXPECT_EQ("foobar1125", user->nameLists[1].channel);
+    EXPECT_EQ(std::vector< std::string >({"fred"}), user->nameLists[1].names);
 }
 
 TEST_F(MessagingTests, SomeoneElseJoinsChannelWeHaveJoined) {
