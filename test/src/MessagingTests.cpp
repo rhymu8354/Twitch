@@ -14,7 +14,7 @@
 #include <mutex>
 #include <regex>
 #include <string>
-#include <SystemAbstractions/StringExtensions.hpp>
+#include <StringExtensions/StringExtensions.hpp>
 #include <Twitch/Connection.hpp>
 #include <Twitch/Messaging.hpp>
 #include <Twitch/TimeKeeper.hpp>
@@ -202,13 +202,13 @@ namespace {
             if (line.substr(0, 5) == "PASS ") {
                 wasPasswordOffered = true;
                 passwordOffered = line.substr(5);
-                passwordOffered = SystemAbstractions::Trim(passwordOffered);
+                passwordOffered = StringExtensions::Trim(passwordOffered);
             } else if (line.substr(0, 5) == "NICK ") {
                 if (!capEndReceived) {
                     nickSetBeforeCapEnd = true;
                 }
                 nicknameOffered = line.substr(5);
-                nicknameOffered = SystemAbstractions::Trim(nicknameOffered);
+                nicknameOffered = StringExtensions::Trim(nicknameOffered);
             } else if (line.substr(0, 7) == "CAP LS ") {
                 capLsReceived = true;
                 capLsArg = line.substr(7);
@@ -667,7 +667,7 @@ struct MessagingTests
         tmi.Join(channel);
         (void)mockServer->AwaitLineReceived("JOIN #" + channel);
         mockServer->ReturnToClient(
-            SystemAbstractions::sprintf(
+            StringExtensions::sprintf(
                 ":%s!%s@%s.tmi.twitch.tv JOIN #%s%s",
                 nickname.c_str(), nickname.c_str(), nickname.c_str(),
                 channel.c_str(), CRLF.c_str()
@@ -689,7 +689,7 @@ struct MessagingTests
         tmi.Leave(channel);
         (void)mockServer->AwaitLineReceived("PART #" + channel);
         mockServer->ReturnToClient(
-            SystemAbstractions::sprintf(
+            StringExtensions::sprintf(
                 ":%s!%s@%s.tmi.twitch.tv PART #%s%s",
                 nickname.c_str(), nickname.c_str(), nickname.c_str(),
                 channel.c_str(), CRLF.c_str()
@@ -731,7 +731,7 @@ TEST_F(MessagingTests, DiagnosticsSubscription) {
             std::string message
         ){
             capturedDiagnosticMessages.push_back(
-                SystemAbstractions::sprintf(
+                StringExtensions::sprintf(
                     "%s[%zu]: %s",
                     senderName.c_str(),
                     level,
@@ -780,7 +780,7 @@ TEST_F(MessagingTests, DiagnosticsUnsubscription) {
             std::string message
         ){
             capturedDiagnosticMessages.push_back(
-                SystemAbstractions::sprintf(
+                StringExtensions::sprintf(
                     "%s[%zu]: %s",
                     senderName.c_str(),
                     level,
@@ -1534,8 +1534,8 @@ TEST_F(MessagingTests, AnonymousConnection) {
     EXPECT_TRUE(std::regex_match(nickname, ANONYMOUS_NICKNAME_PATTERN));
     intmax_t scratch;
     EXPECT_EQ(
-        SystemAbstractions::ToIntegerResult::Success,
-        SystemAbstractions::ToInteger(nickname.substr(9), scratch)
+        StringExtensions::ToIntegerResult::Success,
+        StringExtensions::ToInteger(nickname.substr(9), scratch)
     );
     EXPECT_FALSE(mockServer->IsDisconnected());
 

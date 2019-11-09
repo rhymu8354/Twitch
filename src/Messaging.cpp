@@ -23,7 +23,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string>
-#include <SystemAbstractions/StringExtensions.hpp>
+#include <StringExtensions/StringExtensions.hpp>
 #include <thread>
 #include <Twitch/Messaging.hpp>
 #include <vector>
@@ -699,11 +699,11 @@ namespace Twitch {
                 return false;
             }
             if (message.parameters[2] == "*") {
-                const auto newCapsSupported = SystemAbstractions::Split(message.parameters[3], ' ');
+                const auto newCapsSupported = StringExtensions::Split(message.parameters[3], ' ');
                 capsSupported.insert(newCapsSupported.begin(), newCapsSupported.end());
                 return false;
             } else {
-                const auto newCapsSupported = SystemAbstractions::Split(message.parameters[2], ' ');
+                const auto newCapsSupported = StringExtensions::Split(message.parameters[2], ' ');
                 capsSupported.insert(newCapsSupported.begin(), newCapsSupported.end());
                 if (
                     (capsSupported.find("twitch.tv/commands") == capsSupported.end())
@@ -883,7 +883,7 @@ namespace Twitch {
             }
             NameListInfo nameListInfo;
             nameListInfo.channel = message.parameters[2].substr(1);
-            nameListInfo.names = SystemAbstractions::Split(message.parameters[3], ' ');
+            nameListInfo.names = StringExtensions::Split(message.parameters[3], ' ');
             user->NameList(std::move(nameListInfo));
         }
 
@@ -1124,7 +1124,7 @@ namespace Twitch {
             }
             HostInfo hostInfo;
             hostInfo.hosting = message.parameters[0].substr(1);
-            const auto secondParameterParts = SystemAbstractions::Split(message.parameters[1], ' ');
+            const auto secondParameterParts = StringExtensions::Split(message.parameters[1], ' ');
             if (secondParameterParts[0] == "-") {
                 hostInfo.on = false;
             } else {
@@ -1737,7 +1737,7 @@ namespace Twitch {
     void Messaging::LogInAnonymously() {
         Action action;
         action.type = Action::Type::LogIn;
-        action.nickname = SystemAbstractions::sprintf(
+        action.nickname = StringExtensions::sprintf(
             "justinfan%d",
             rand()
         );

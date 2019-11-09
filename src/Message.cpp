@@ -10,7 +10,7 @@
 
 #include <inttypes.h>
 #include <stdio.h>
-#include <SystemAbstractions/StringExtensions.hpp>
+#include <StringExtensions/StringExtensions.hpp>
 #include <utility>
 
 namespace {
@@ -63,14 +63,14 @@ namespace {
      */
     Twitch::Messaging::TagsInfo ParseTags(const std::string& unparsedTags) {
         Twitch::Messaging::TagsInfo parsedTags;
-        const auto tags = SystemAbstractions::Split(unparsedTags, ';');
+        const auto tags = StringExtensions::Split(unparsedTags, ';');
         for (const auto& tag: tags) {
             const auto nameValuePair = SplitNameValue(tag);
             const auto& name = nameValuePair.first;
             const auto& value = nameValuePair.second;
             parsedTags.allTags[name] = value;
             if (name == "badges") {
-                const auto badges = SystemAbstractions::Split(value, ',');
+                const auto badges = StringExtensions::Split(value, ',');
                 for (const auto& badge: badges) {
                     (void)parsedTags.badges.insert(badge);
                 }
@@ -83,9 +83,9 @@ namespace {
             } else if (name == "display-name") {
                 parsedTags.displayName = value;
             } else if (name == "emotes") {
-                const auto emotes = SystemAbstractions::Split(value, '/');
+                const auto emotes = StringExtensions::Split(value, '/');
                 for (const auto& emote: emotes) {
-                    const auto idInstancesPair = SystemAbstractions::Split(emote, ':');
+                    const auto idInstancesPair = StringExtensions::Split(emote, ':');
                     if (idInstancesPair.size() != 2) {
                         continue;
                     }
@@ -94,7 +94,7 @@ namespace {
                         continue;
                     }
                     auto& emoteInstances = parsedTags.emotes[id];
-                    const auto instances = SystemAbstractions::Split(idInstancesPair[1], ',');
+                    const auto instances = StringExtensions::Split(idInstancesPair[1], ',');
                     for (const auto& instance: instances) {
                         int begin, end;
                         if (sscanf(instance.c_str(), "%d-%d", &begin, &end) != 2) {
