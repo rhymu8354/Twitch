@@ -1528,7 +1528,7 @@ namespace Twitch {
                         const auto recipientIdTag = message.tags.allTags.find("msg-param-mass-gift-count");
                         if (
                             (recipientIdTag == message.tags.allTags.end())
-                            || (sscanf(recipientIdTag->second.c_str(), "%" SCNuMAX, &sub.massGiftCount) != 1)
+                            || (sscanf(recipientIdTag->second.c_str(), "%zu", &sub.massGiftCount) != 1)
                         ) {
                             sub.massGiftCount = 0;
                         }
