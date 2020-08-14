@@ -1315,6 +1315,16 @@ TEST_F(MessagingTests, SendMessage) {
     EXPECT_TRUE(mockServer->AwaitLineReceived("PRIVMSG #foobar1125 :Hello, World!"));
 }
 
+TEST_F(MessagingTests, SendResponse) {
+    // Log in and join a channel.
+    LogIn();
+    Join("foobar1125");
+
+    // Send a response to the channel we just joined.
+    tmi.SendResponse("foobar1125", "Hello, World!", "xyz");
+    EXPECT_TRUE(mockServer->AwaitLineReceived("@reply-parent-msg-id=xyz PRIVMSG #foobar1125 :Hello, World!"));
+}
+
 TEST_F(MessagingTests, SendMessageWhenNotConnected) {
     tmi.SendMessage("foobar1125", "Hello, World!");
     EXPECT_FALSE(mockServer->AwaitLineReceived("PRIVMSG #foobar1125 :Hello, World!"));

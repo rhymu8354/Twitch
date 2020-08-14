@@ -99,6 +99,11 @@ namespace Twitch {
             uintmax_t userId = 0;
 
             /**
+             * This is the `id` tag of the message, if present.
+             */
+            std::string id;
+
+            /**
              * This holds a copy of the names and values of all the tags,
              * including both the ones known about by the parser (above) as
              * well as those not known.
@@ -920,6 +925,27 @@ namespace Twitch {
         void SendMessage(
             const std::string& channel,
             const std::string& message
+        );
+
+        /**
+         * This method sends a response to Twitch chat channel.  A response
+         * is like a message, except that it includes a tag indicating
+         * that the message is intended to be a response to another message.
+         *
+         * @param[in] channel
+         *     This is the name of the channel to which to send the message.
+         *
+         * @param[in] message
+         *     This is the content of the message to send.
+         *
+         * @param[in] parent
+         *     This is the `id` of the message for which this should
+         *     be interpreted as a response.
+         */
+        void SendResponse(
+            const std::string& channel,
+            const std::string& message,
+            const std::string& parent
         );
 
         /**

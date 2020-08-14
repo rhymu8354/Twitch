@@ -123,6 +123,8 @@ namespace {
                 if (sscanf(value.c_str(), "%" SCNuMAX, &parsedTags.userId) != 1) {
                     parsedTags.userId = 0;
                 }
+            } else if (name == "id") {
+                parsedTags.id = value;
             }
         }
         return parsedTags;

@@ -139,6 +139,13 @@ namespace {
         std::string message;
 
         /**
+         * This is used with the `SendMessage` action.  If not empty,
+         * it indicates the `id` of the message to which the message
+         * to be sent is intended to reply.
+         */
+        std::string parent;
+
+        /**
          * This flag is used when the action may be done anonymously or not,
          * to indicate whether or not to be anonymous.
          */
@@ -1616,7 +1623,11 @@ namespace Twitch {
             if (anonymous) {
                 return;
             }
-            SendLineToTwitchServer(*connection, "PRIVMSG #" + action.nickname + " :" + action.message);
+            if (action.parent.empty()) {
+                SendLineToTwitchServer(*connection, "PRIVMSG #" + action.nickname + " :" + action.message);
+            } else {
+                SendLineToTwitchServer(*connection, "@reply-parent-msg-id=" + action.parent + " PRIVMSG #" + action.nickname + " :" + action.message);
+            }
         }
 
         /**
@@ -1774,6 +1785,19 @@ namespace Twitch {
         action.type = Action::Type::SendMessage;
         action.nickname = channel;
         action.message = message;
+        impl_->PostAction(std::move(action));
+    }
+
+    void Messaging::SendResponse(
+        const std::string& channel,
+        const std::string& message,
+        const std::string& parent
+    ) {
+        Action action;
+        action.type = Action::Type::SendMessage;
+        action.nickname = channel;
+        action.message = message;
+        action.parent = parent;
         impl_->PostAction(std::move(action));
     }
 
